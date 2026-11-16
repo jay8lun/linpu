@@ -171,11 +171,15 @@ public abstract class AIBaseChatServiceImpl implements IAIChatService {
 
     @Override
     public boolean checkIfOverLmtRequest(Long agentId, Integer dayLmtPerClient, String clientId) {
+        // 未配置限流次数（null 或非正数）视为不限流，避免 Integer 拆箱 NPE
+        if (dayLmtPerClient == null || dayLmtPerClient <= 0) {
+            return true;
+        }
         Long number = redisTemplate.execute(limitScript,
                 Collections.singletonList(Constants.AI_AGENT_CHAT_LMT + agentId + ":" + clientId),
                 dayLmtPerClient,
                 (int) TimeUnit.DAYS.toSeconds(1));
-        return number.intValue() <= dayLmtPerClient;
+        return number != null && number.intValue() <= dayLmtPerClient;
     }
 
     @Override

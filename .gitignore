@@ -54,3 +54,6 @@ package-lock.json
 .vscode
 .env
 doc-site/site
+# 评测运行结果（不纳入版本管理）
+eval/results/*.jsonl
+!eval/results/.gitkeep

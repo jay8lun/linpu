@@ -11,6 +11,7 @@ import com.ruoyi.ai.domain.ChatMessage;
 import com.ruoyi.ai.service.*;
 import com.ruoyi.ai.util.Base64DataUriUtil;
 import com.ruoyi.ai.util.Constants;
+import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.file.FileUtils;
 import com.ruoyi.common.utils.uuid.IdUtils;
 import com.ruoyi.system.service.ISysConfigService;
@@ -76,6 +77,10 @@ public class AIAssistantExecutor extends AIBaseChatServiceImpl {
         String traceId = IdUtils.fastSimpleUUID();
         ChatMessage userMessage = saveChatMessage(prompt, clientId, sessionId, aiAgent.getId(), ChatMessageType.USER, attachmentIds, traceId);
         String promptTemplate = aiAgent.getPromptTemplate();
+        // 未配置提示词模板时使用默认模板，避免空指针
+        if (StringUtils.isBlank(promptTemplate)) {
+            promptTemplate = Constants.USER_MSG_TEMPLATE;
+        }
         if (promptTemplate.contains(Constants.USER_MSG_TEMPLATE)) {
             promptTemplate = promptTemplate.replace(Constants.USER_MSG_TEMPLATE, prompt);
         } else {

@@ -93,6 +93,10 @@ public class AIChatServiceImpl extends AIBaseChatServiceImpl {
         StreamingChatModel llm = modelBuilder.getStreamingLLM(model);
 
         String promptTemplate = aiAgent.getPromptTemplate();
+        // 未配置提示词模板时使用默认模板，避免空指针
+        if (StringUtils.isBlank(promptTemplate)) {
+            promptTemplate = Constants.USER_MSG_TEMPLATE;
+        }
         if (promptTemplate.contains(Constants.USER_MSG_TEMPLATE)) {
             promptTemplate = promptTemplate.replace(Constants.USER_MSG_TEMPLATE, prompt);
         } else {
