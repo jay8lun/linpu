@@ -192,13 +192,19 @@ def main():
     ap.add_argument("--token", default=None, help="JWT（后端开启鉴权时必填）")
     ap.add_argument("--has-kb", action="store_true",
                     help="当前环境已配置知识库，否则跳过 requires=knowledge_base 的用例")
+    ap.add_argument("--has-web-search", action="store_true",
+                    help="当前环境已启用联网搜索，否则跳过 requires=web_search 的用例")
     ap.add_argument("--dry-run", action="store_true",
                     help="只统计将执行/跳过的用例数，不发请求")
     ap.add_argument("--out-dir", default="eval/results")
     args = ap.parse_args()
 
     cases = load_cases(args.cases)
-    env_caps = {"knowledge_base"} if args.has_kb else set()
+    env_caps = set()
+    if args.has_kb:
+        env_caps.add("knowledge_base")
+    if args.has_web_search:
+        env_caps.add("web_search")
 
     if args.dry_run:
         will_run, will_skip = [], []

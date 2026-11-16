@@ -55,5 +55,10 @@ package-lock.json
 .env
 doc-site/site
 # 评测运行结果（不纳入版本管理）
-eval/results/*.jsonl
+eval/results/*
 !eval/results/.gitkeep
+
+# 用户上传文件目录（挂载卷，不入库）
+uploadPath/
+# 本地向量模型（体积大，不入库）
+models/

@@ -15,9 +15,13 @@ eval/
 │   ├── multi_turn.jsonl    # 分维度：多轮记忆 20
 │   ├── refusal.jsonl       # 分维度：拒答安全 30
 │   └── hallucination.jsonl # 分维度：幻觉对抗 30
+├── kb/                     # 知识库语料（评测专用）
+│   └── linpu-platform-manual.md   # 60 小节的平台技术手册
 ├── results/                # 每轮运行的结果（JSONL）
 └── scripts/
     ├── gen_cases.py        # 生成/重建评测集（改模板后重跑）
+    ├── patch_kb_assertions.py   # 给知识库用例补有区分度的断言
+    ├── ingest_kb_sections.py    # 按小节切分并写入 pgvector
     ├── run_eval.py         # 跑批：调用后端对话接口，收集结果与指标
     └── compare_eval.py     # 对比分析：指标变化 + 回归检测
 ```
@@ -98,9 +102,41 @@ eval/
 ```bash
 python eval/scripts/run_eval.py --cases eval/cases/full_200.jsonl \
   --run-id dry --agent-id 1 --dry-run
-# 无知识库：执行 140 / 跳过 60
-# 加 --has-kb：执行 200 / 跳过 0
+# 无任何依赖：执行 132 / 跳过 68
+# 加 --has-kb：执行 192 / 跳过 8（那 8 条需要联网搜索）
+# 再加 --has-web-search：执行 200 / 跳过 0
 ```
+
+### 0.1 搭建知识库（可选，跑 knowledge_qa 维度需要）
+
+`knowledge_qa` 的 60 条用例断言的是**手册里才有的特征值**（如错误码 `LP-4001`、
+端口 `18142`），因此必须先把手册灌进知识库，否则会正确判为失败。
+
+```bash
+# 1) 登录拿 token（生产开启了验证码，需先临时关闭 sys.account.captchaEnabled）
+# 2) 新建知识库
+curl -X POST http://localhost:8080/ai/knowledgeBase \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"linpu 平台技术手册"}'
+
+# 3) 上传文档
+curl -X POST http://localhost:8080/common/upload \
+  -H "Authorization: Bearer $TOKEN" -F "file=@eval/kb/linpu-platform-manual.md"
+
+# 4) 确认默认向量模型已就绪
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/ai/knowledgeBase/check-embedding-dimension
+
+# 5) 按小节切分写入 pgvector（比按字符切分召回更准）
+python eval/scripts/ingest_kb_sections.py
+docker cp eval/results/_kb_sections.sql pgvector:/tmp/kb.sql
+docker exec -e PGPASSWORD=root pgvector \
+  psql -U root -d embedding -f /tmp/kb.sql
+
+# 6) 把知识库绑定到智能体：kb_ids='1'，且 prompt_template 必须包含 {data} 和 {question}
+```
+
+> 注意：`prompt_template` 里没有 `{data}` 占位符时，后端**不会**做检索。
 
 ### 1. 跑基线
 
@@ -145,6 +181,21 @@ python eval/scripts/gen_cases.py
 3. **第2轮**：补单测 → 验证正确性
 4. **第3轮**：异常处理/日志 → 验证稳定性
 5. **第4轮**：提示词/RAG 参数调优 → 验证准确率/召回
+
+## 已知限制（实测发现）
+
+**内置本地向量模型区分度不足**。默认向量模型 `text2vec-base-chinese`（ONNX，768 维）
+对同领域长中文文本的基线相似度很高：同一篇手册中 60 个不同小节的向量两两余弦相似度
+普遍落在 0.75–0.92，而语义正确匹配的章节与其他章节的分数差通常只有 0.01–0.03。
+后果是排序接近随机，`knowledge_qa` 维度准确率显著偏低。
+
+已排除代码问题：把库里存的向量取出来，用 Python 按同样方式（ONNX + mean pooling +
+L2 归一化）重算，余弦相似度为 **1.0**，即应用侧向量化实现正确。
+
+改进方向（按性价比排序）：
+1. 换更强向量模型（如 bge-large-zh-v1.5，需维度同为 768 或同步调整 `pgvector.dimension`）；
+2. 引入关键词检索（BM25）与向量检索混合排序；
+3. 在分段中保留标题并做「标题 + 正文」双字段打分。
 
 ## 注意事项
 

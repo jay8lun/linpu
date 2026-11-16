@@ -133,6 +133,8 @@ services:
     volumes:
       - ./uploadPath:/uploadPath
       - ./skills:/app/skills
+      # 持久化本地向量模型，避免容器重建后重复下载
+      - ./models:/app/models
     depends_on:
       redis:
         condition: service_started
