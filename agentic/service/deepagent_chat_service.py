@@ -29,6 +29,12 @@ from sandbox.python_sandbox_backend import get_or_create_sandbox
 from grpc_client import get_grpc_client
 from util.flow_tree_parser import TreeNode
 from logger_config import logger
+from service.sse_formatter import (
+    format_sse_text,
+    format_sse_tool_call,
+    format_sse_tool_result,
+    format_sse_error,
+)
 from pydantic import create_model, Field
 import os
 from pathlib import Path
@@ -189,7 +195,7 @@ class DeepAgentChatService:
                     logger.info(f"LRU 缓存已满，驱逐 session: {evicted_key}")
 
             if root_agent is None:
-                yield self._format_sse_error("无法构建根 Agent")
+                yield format_sse_error("无法构建根 Agent")
                 return
 
             # 根 agent 始终显示推理内容给前端
@@ -249,7 +255,7 @@ class DeepAgentChatService:
                     logger.info(f"工具： {tool_name}, tool_id: {tool_id} 执行完成")
                     if tool_id in sent_tool_call_ids:
                         if show_reasoning:
-                            yield self._format_sse_tool_result(
+                            yield format_sse_tool_result(
                                 tool_name,
                                 tool_content,
                                 agent_id=current_agent_id,
@@ -269,7 +275,7 @@ class DeepAgentChatService:
                             # 文本内容块
                             text = block.get("text", "")
                             if text and show_reasoning:
-                                yield self._format_sse_text(
+                                yield format_sse_text(
                                     text,
                                     agent_id=current_agent_id,
                                     agent_name=current_agent_name,
@@ -291,7 +297,7 @@ class DeepAgentChatService:
                                         f"工具调用：{tool_name}, tool_id: {tool_id}"
                                     )
                                     if show_reasoning:
-                                        yield self._format_sse_tool_call(
+                                        yield format_sse_tool_call(
                                             tool_name,
                                             agent_id=current_agent_id,
                                             agent_name=current_agent_name,
@@ -302,7 +308,7 @@ class DeepAgentChatService:
 
         except Exception as e:
             logger.error(f"对话流处理异常: {e}", exc_info=True)
-            yield self._format_sse_error(str(e))
+            yield format_sse_error(str(e))
 
     async def _build_agent_from_tree_node(
         self, tree_node: TreeNode, web_search: bool = False
@@ -704,7 +710,7 @@ class DeepAgentChatService:
                     result = sdk.run_python_and_get_stdout(exec_code)
                     return result if result else "(执行无输出)"
                 except Exception as e:
-                    logger.error(f"沙箱工具 {name} 执行失败: {e}")
+                    logger.error(f"沙箱工具 {name} 执行失败: {e}", exc_info=True)
                     return f"执行失败: {e}"
 
             return sandbox_tool
@@ -880,7 +886,7 @@ class DeepAgentChatService:
             logger.warning("tavily-python 未安装，无法启用联网搜索")
             return None
         except Exception as e:
-            logger.error(f"创建搜索工具失败: {e}")
+            logger.error(f"创建搜索工具失败: {e}", exc_info=True)
             return None
 
     def _build_messages(
@@ -912,60 +918,6 @@ class DeepAgentChatService:
         else:
             return [{"role": "user", "content": prompt}]
 
-    @staticmethod
-    def _format_sse_text(
-        content: str, agent_id: Optional[int] = None, agent_name: str = "主 Agent"
-    ) -> str:
-        """
-        格式化文本 SSE 数据块
-        格式: {"msg": "内容", "agentId": 1, "agentName": "Jarvis"}
-        """
-        chunk_obj = {"msg": content}
-        if agent_id is not None:
-            chunk_obj["agentId"] = agent_id
-        chunk_obj["agentName"] = agent_name
-        chunk_str = json.dumps(chunk_obj, ensure_ascii=False)
-        return f"data: {chunk_str}\n\n"
-
-    @staticmethod
-    def _format_sse_tool_call(
-        tool_name: str, agent_id: Optional[int] = None, agent_name: str = "主 Agent"
-    ) -> str:
-        """
-        格式化工具调用开始 SSE 消息
-        格式: {"tool_call": {"toolName": "工具名"}, "agentId": 1, "agentName": "Jarvis"}
-        """
-        chunk_obj = {"tool_call": {"toolName": tool_name}}
-        if agent_id is not None:
-            chunk_obj["agentId"] = agent_id
-        chunk_obj["agentName"] = agent_name
-        chunk_str = json.dumps(chunk_obj, ensure_ascii=False)
-        return f"data: {chunk_str}\n\n"
-
-    @staticmethod
-    def _format_sse_tool_result(
-        tool_name: str,
-        result: str,
-        agent_id: Optional[int] = None,
-        agent_name: str = "主 Agent",
-    ) -> str:
-        """
-        格式化工具调用完成 SSE 消息
-        格式: {"tool_called": {"toolName": "工具名", "toolInvokeResult": "结果"}, "agentId": 1, "agentName": "Jarvis"}
-        """
-        chunk_obj = {"tool_called": {"toolName": tool_name, "toolInvokeResult": result}}
-        if agent_id is not None:
-            chunk_obj["agentId"] = agent_id
-        chunk_obj["agentName"] = agent_name
-        chunk_str = json.dumps(chunk_obj, ensure_ascii=False)
-        return f"data: {chunk_str}\n\n"
-
-    @staticmethod
-    def _format_sse_error(error_msg: str) -> str:
-        """格式化错误 SSE 消息"""
-        chunk_obj = {"error": {"message": error_msg}}
-        chunk_str = json.dumps(chunk_obj, ensure_ascii=False)
-        return f"data: {chunk_str}\n\n"
 
 
 # 全局服务实例

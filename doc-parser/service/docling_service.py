@@ -71,49 +71,56 @@ vlm_pipeline_options.vlm_options = ApiVlmOptions(
     concurrency=OCR_MAX_CONCURRENT,
 )
 
-# pdf_pipeline_options = PdfPipelineOptions()
-# pdf_pipeline_options.do_picture_description = True
-# pdf_pipeline_options.enable_remote_services = True
-# pdf_pipeline_options.picture_description_options = pic_desc_api_options
+# RapidOCR 模型目录（懒加载：首次处理 PDF 时才下载）
+# 支持通过环境变量 RAPIDOCR_MODEL_DIR 指定已预下载的模型目录，避免运行时联网
+_RAPIDOCR_MODEL_DIR = os.getenv("RAPIDOCR_MODEL_DIR", "").strip()
 
-print("Loading RapidOCR models")
-download_path = snapshot_download(repo_id="SWHL/RapidOCR")
 
-# Setup RapidOcrOptions for english detection
-det_model_path = os.path.join(
-    download_path, "PP-OCRv4", "en_PP-OCRv3_det_infer.onnx"
-)
-rec_model_path = os.path.join(
-    download_path, "PP-OCRv4", "ch_PP-OCRv4_rec_server_infer.onnx"
-)
-cls_model_path = os.path.join(
-    download_path, "PP-OCRv3", "ch_ppocr_mobile_v2.0_cls_train.onnx"
-)
-ocr_options = RapidOcrOptions(
-    det_model_path=det_model_path,
-    rec_model_path=rec_model_path,
-    cls_model_path=cls_model_path,
-)
+def _build_pdf_pipeline_options() -> PdfPipelineOptions:
+    """构建 PDF pipeline options（含 RapidOCR 模型，懒加载）。"""
+    if _RAPIDOCR_MODEL_DIR:
+        download_path = _RAPIDOCR_MODEL_DIR
+        logger.info(f"使用预下载的 RapidOCR 模型目录: {download_path}")
+    else:
+        logger.info("下载 RapidOCR 模型（首次处理 PDF）...")
+        download_path = snapshot_download(repo_id="SWHL/RapidOCR")
+        logger.info(f"RapidOCR 模型已就绪: {download_path}")
 
-pdf_pipeline_options = PdfPipelineOptions(
-    ocr_options=ocr_options,
-)
+    # Setup RapidOcrOptions for english detection
+    det_model_path = os.path.join(
+        download_path, "PP-OCRv4", "en_PP-OCRv3_det_infer.onnx"
+    )
+    rec_model_path = os.path.join(
+        download_path, "PP-OCRv4", "ch_PP-OCRv4_rec_server_infer.onnx"
+    )
+    cls_model_path = os.path.join(
+        download_path, "PP-OCRv3", "ch_ppocr_mobile_v2.0_cls_train.onnx"
+    )
+    ocr_options = RapidOcrOptions(
+        det_model_path=det_model_path,
+        rec_model_path=rec_model_path,
+        cls_model_path=cls_model_path,
+    )
 
-pdf_pipeline_options.do_ocr = True
-pdf_pipeline_options.do_table_structure = True
-pdf_pipeline_options.table_structure_options.do_cell_matching = True
-pdf_pipeline_options.enable_remote_services = True
-pdf_pipeline_options.do_picture_description = DESCRIBE_DOC_IMG
-pdf_pipeline_options.picture_description_options = pic_desc_api_options
+    pdf_pipeline_options = PdfPipelineOptions(ocr_options=ocr_options)
+    pdf_pipeline_options.do_ocr = True
+    pdf_pipeline_options.do_table_structure = True
+    pdf_pipeline_options.table_structure_options.do_cell_matching = True
+    pdf_pipeline_options.enable_remote_services = True
+    pdf_pipeline_options.do_picture_description = DESCRIBE_DOC_IMG
+    pdf_pipeline_options.picture_description_options = pic_desc_api_options
+    return pdf_pipeline_options
 
 
 def get_doc_converter():
     global _converter
     if _converter is None:
-        logger.info("初始化 Docling 转换器（全局单例）")
+        logger.info("初始化 Docling 转换器（全局单例，OCR 模型按需加载）")
         _converter = DocumentConverter(
             format_options={
-                InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_pipeline_options),
+                InputFormat.PDF: PdfFormatOption(
+                    pipeline_options=_build_pdf_pipeline_options()
+                ),
                 InputFormat.DOCX: WordFormatOption(
                     pipeline_options=vlm_pipeline_options
                 ),

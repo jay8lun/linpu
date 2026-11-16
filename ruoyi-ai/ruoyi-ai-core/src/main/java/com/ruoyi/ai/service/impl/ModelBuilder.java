@@ -24,6 +24,8 @@ import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class ModelBuilder {
@@ -31,7 +33,29 @@ public class ModelBuilder {
     @Resource
     private AiConfig aiConfig;
 
+    // 模型实例缓存：避免每次对话都重建 ChatModel / EmbeddingModel（LangChain4j 实例化含 HttpClient 开销）
+    // key 为 model.getId()，模型配置变更时通过 evictModel 主动失效
+    private final Map<Long, StreamingChatModel> streamingChatModelCache = new ConcurrentHashMap<>();
+    private final Map<Long, ChatModel> blockingChatModelCache = new ConcurrentHashMap<>();
+    private final Map<Long, EmbeddingModel> embeddingModelCache = new ConcurrentHashMap<>();
+
+    /**
+     * 失效某个模型的全部缓存（模型更新/删除时调用）。
+     */
+    public void evictModel(Long modelId) {
+        streamingChatModelCache.remove(modelId);
+        blockingChatModelCache.remove(modelId);
+        embeddingModelCache.remove(modelId);
+    }
+
     public EmbeddingModel getEmbeddingModel(Model model) {
+        Long modelId = model.getId();
+        if (modelId != null) {
+            EmbeddingModel cached = embeddingModelCache.get(modelId);
+            if (cached != null) {
+                return cached;
+            }
+        }
         EmbeddingModel embeddingModel;
         ModelProvider provider = ModelProvider.fromValue(model.getProvider());
         if (provider == ModelProvider.OLLAMA) {
@@ -52,10 +76,20 @@ public class ModelBuilder {
         } else {
             throw new ServiceException("不支持的模型提供商");
         }
+        if (modelId != null) {
+            embeddingModelCache.put(modelId, embeddingModel);
+        }
         return embeddingModel;
     }
 
     public StreamingChatModel getStreamingLLM(Model model) {
+        Long modelId = model.getId();
+        if (modelId != null) {
+            StreamingChatModel cached = streamingChatModelCache.get(modelId);
+            if (cached != null) {
+                return cached;
+            }
+        }
         ModelProvider provider = ModelProvider.fromValue(model.getProvider());
         StreamingChatModel llm = null;
         if (provider == ModelProvider.OLLAMA) {
@@ -77,10 +111,20 @@ public class ModelBuilder {
                     .logResponses(false)
                     .build();
         }
+        if (modelId != null) {
+            streamingChatModelCache.put(modelId, llm);
+        }
         return llm;
     }
 
     public ChatModel getBlockingLLM(Model model) {
+        Long modelId = model.getId();
+        if (modelId != null) {
+            ChatModel cached = blockingChatModelCache.get(modelId);
+            if (cached != null) {
+                return cached;
+            }
+        }
         ModelProvider provider = ModelProvider.fromValue(model.getProvider());
         ChatModel llm = null;
         if (provider == ModelProvider.OLLAMA) {
@@ -95,6 +139,9 @@ public class ModelBuilder {
                     .apiKey(model.getApiKey())
                     .build();
         }
+        if (modelId != null) {
+            blockingChatModelCache.put(modelId, llm);
+        }
         return llm;
     }
 
@@ -102,13 +149,13 @@ public class ModelBuilder {
         ModelProvider provider = ModelProvider.fromValue(model.getProvider());
         ChatRequestParameters parameters = null;
         if (provider == ModelProvider.OLLAMA) {
-            parameters = OpenAiChatRequestParameters.builder()
+            parameters = OllamaChatRequestParameters.builder()
                     .modelName(model.getName())
                     .temperature(model.getTemperature())
                     .maxOutputTokens(model.getMaxOutputToken())
                     .build();
         } else {
-            parameters = OllamaChatRequestParameters.builder()
+            parameters = OpenAiChatRequestParameters.builder()
                     .modelName(model.getName())
                     .temperature(model.getTemperature())
                     .maxOutputTokens(model.getMaxOutputToken())

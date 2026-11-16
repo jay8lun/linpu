@@ -51,14 +51,41 @@ class GrpcClient:
         self.mcp_stub: Optional[mcp_service_pb2_grpc.AgentMcpGrpcServiceStub] = None
         
     def connect(self) -> None:
-        """建立 gRPC 连接，所有 Stub 共享同一个 Channel"""
+        """建立 gRPC 连接，所有 Stub 共享同一个 Channel（含 keepalive 心跳，避免长连接被中断）"""
         if self.channel is None:
             target = f"{self.host}:{self.port}"
-            self.channel = grpc.insecure_channel(target)
+            # keepalive 配置：空闲 30s 后发心跳，避免长时间空闲被服务端/网络设备断开
+            keepalive_options = [
+                ("grpc.keepalive_time_ms", 30000),
+                ("grpc.keepalive_timeout_ms", 10000),
+                ("grpc.keepalive_permit_without_calls", 1),
+                ("grpc.http2.max_pings_without_data", 0),
+            ]
+            self.channel = grpc.insecure_channel(target, options=keepalive_options)
             self.model_stub = model_service_pb2_grpc.ModelGrpcServiceStub(self.channel)
             self.ai_agent_stub = ai_agent_service_pb2_grpc.AiAgentGrpcServiceStub(self.channel)
             self.mcp_stub = mcp_service_pb2_grpc.AgentMcpGrpcServiceStub(self.channel)
             logger.info(f"已连接到 gRPC 服务器: {target}")
+
+    def reconnect(self) -> None:
+        """重建连接（用于连接断开后恢复）"""
+        self.close()
+        self.connect()
+
+    def ensure_connected(self) -> None:
+        """确保连接可用（channel 为空或已关闭时重建）"""
+        if self.channel is None:
+            self.connect()
+            return
+        # 检查 channel 状态，READY/IDLE/CONNECTING 视为可用，TRANSIENT_FAILURE/SHUTDOWN 需重建
+        try:
+            state = self.channel._channel.check_connectivity_state(True)
+            if state in (grpc.ChannelConnectivity.SHUTDOWN, grpc.ChannelConnectivity.TRANSIENT_FAILURE):
+                logger.warning(f"gRPC channel 状态异常({state})，触发重连")
+                self.reconnect()
+        except Exception:
+            # 状态检查失败不阻塞主流程，仅在明确异常时重建
+            pass
     
     def close(self) -> None:
         """关闭 gRPC 连接"""
@@ -119,10 +146,13 @@ class GrpcClient:
             return models
             
         except grpc.RpcError as e:
-            logger.error(f"gRPC 调用失败: {e.code()} - {e.details()}")
+            logger.error(f"gRPC 调用失败: {e.code()} - {e.details()}", exc_info=True)
+            # 服务不可用时重建连接，避免长连接失效后持续失败
+            if e.code() == grpc.StatusCode.UNAVAILABLE:
+                self.reconnect()
             raise
         except Exception as e:
-            logger.error(f"调用模型列表时发生错误: {e}")
+            logger.error(f"调用模型列表时发生错误: {e}", exc_info=True)
             raise
     
     def get_model_by_id(self, model_id: int, timeout: float = 10.0) -> Optional[Dict[str, Any]]:
@@ -166,10 +196,13 @@ class GrpcClient:
                 return None
                 
         except grpc.RpcError as e:
-            logger.error(f"gRPC 调用失败: {e.code()} - {e.details()}")
+            logger.error(f"gRPC 调用失败: {e.code()} - {e.details()}", exc_info=True)
+            # 服务不可用时重建连接，避免长连接失效后持续失败
+            if e.code() == grpc.StatusCode.UNAVAILABLE:
+                self.reconnect()
             raise
         except Exception as e:
-            logger.error(f"查询模型时发生错误: {e}")
+            logger.error(f"查询模型时发生错误: {e}", exc_info=True)
             raise
     
     # ============ AiAgentGrpcService 接口 ============
@@ -312,10 +345,13 @@ class GrpcClient:
             return services
             
         except grpc.RpcError as e:
-            logger.error(f"gRPC 调用失败: {e.code()} - {e.details()}")
+            logger.error(f"gRPC 调用失败: {e.code()} - {e.details()}", exc_info=True)
+            # 服务不可用时重建连接，避免长连接失效后持续失败
+            if e.code() == grpc.StatusCode.UNAVAILABLE:
+                self.reconnect()
             raise
         except Exception as e:
-            logger.error(f"查询MCP服务时发生错误: {e}")
+            logger.error(f"查询MCP服务时发生错误: {e}", exc_info=True)
             raise
     
     def get_ai_agent_by_id(self, agent_id: int, timeout: float = 10.0) -> Optional[Dict[str, Any]]:
@@ -349,10 +385,13 @@ class GrpcClient:
                 return None
                 
         except grpc.RpcError as e:
-            logger.error(f"gRPC 调用失败: {e.code()} - {e.details()}")
+            logger.error(f"gRPC 调用失败: {e.code()} - {e.details()}", exc_info=True)
+            # 服务不可用时重建连接，避免长连接失效后持续失败
+            if e.code() == grpc.StatusCode.UNAVAILABLE:
+                self.reconnect()
             raise
         except Exception as e:
-            logger.error(f"查询 AI Agent 时发生错误: {e}")
+            logger.error(f"查询 AI Agent 时发生错误: {e}", exc_info=True)
             raise
     
     def get_ai_agent_with_tool_and_skill_by_id(self, agent_id: int, timeout: float = 10.0) -> Optional[Dict[str, Any]]:
@@ -386,10 +425,13 @@ class GrpcClient:
                 return None
                 
         except grpc.RpcError as e:
-            logger.error(f"gRPC 调用失败: {e.code()} - {e.details()}")
+            logger.error(f"gRPC 调用失败: {e.code()} - {e.details()}", exc_info=True)
+            # 服务不可用时重建连接，避免长连接失效后持续失败
+            if e.code() == grpc.StatusCode.UNAVAILABLE:
+                self.reconnect()
             raise
         except Exception as e:
-            logger.error(f"查询 AI Agent 及详情时发生错误: {e}")
+            logger.error(f"查询 AI Agent 及详情时发生错误: {e}", exc_info=True)
             raise
 
 
