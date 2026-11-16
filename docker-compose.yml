@@ -1,0 +1,241 @@
+version: '3.8'
+
+services:
+  redis:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-net
+  mysql:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:8.0.39
+    container_name: mysql
+    restart: unless-stopped  # 可选：异常退出时自动重启
+    ports:
+      - "3306:3306"  # 映射MySQL端口
+    environment:
+      - MYSQL_ROOT_PASSWORD=root  # 设置root用户密码
+      - MYSQL_DATABASE=ry-vue
+    volumes:
+      - mysql-data:/var/lib/mysql  # 挂载数据目录，实现数据持久化
+#      - ./sql:/docker-entrypoint-initdb.d
+      - ./my.cnf:/etc/my.cnf
+    command: >
+      mysqld --character-set-server=utf8mb4
+             --collation-server=utf8mb4_general_ci
+             --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-net
+  postgres:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/ghcr.io/immich-app/postgres:15-vectorchord0.4.2-pgvectors0.3.0
+    container_name: pgvector
+    restart: unless-stopped
+    environment:
+      # 设置管理员账号为root（PostgreSQL中的超级用户）
+      POSTGRES_USER: root
+      # 管理员（root）密码
+      POSTGRES_PASSWORD: root
+      # 初始创建的数据库名称
+      POSTGRES_DB: embedding
+      # 字符集设置，支持中文
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --lc-collate=C --lc-ctype=C
+      # 时区设置
+      TZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # 可选：初始化脚本目录
+      # - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d embedding"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+    command: >
+      postgres
+      -c max_connections=100
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=1310kB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+  agentic-sandbox:
+    image: ghcr.io/zjwan461/python-sandbox:v1.0.0
+    container_name: agentic-sandbox
+    environment:
+      - SANDBOX_API_KEY=${SANDBOX_API_KEY:-sandbox-secret-key}
+      - SANDBOX_IMAGE=${SANDBOX_IMAGE:-python:3.12-trixie}
+      - SANDBOX_CONTAINER_NAME_PREFIX=${SANDBOX_CONTAINER_NAME_PREFIX:-python-sandbox-}
+      - SANDBOX_SESSION_TIMEOUT_MILLIS=${SANDBOX_SESSION_TIMEOUT_MILLIS:-86400000}
+      - SANDBOX_SESSION_CLEANUP_INTERVAL_MILLIS=${SANDBOX_SESSION_CLEANUP_INTERVAL_MILLIS:-3600000}
+      - SANDBOX_MAX_CONTAINERS=${SANDBOX_MAX_CONTAINERS:-10}
+      - SANDBOX_MAX_CONTAINERS_BEHAVIOR=${SANDBOX_MAX_CONTAINERS_BEHAVIOR:-evict-oldest}
+      - SANDBOX_PULL_IMAGE_ON_STARTUP=${SANDBOX_PULL_IMAGE_ON_STARTUP:-false}
+      # 单个容器的内存限制（字节），默认 512MB
+      - SANDBOX_CONTAINER_MEMORY_LIMIT=${SANDBOX_CONTAINER_MEMORY_LIMIT:-536870912}
+      # 本地 Docker 默认 unix socket；远程 Docker 时可在 .env 中覆盖为 tcp://host:2375
+      - DOCKER_HOST=${DOCKER_HOST:-unix:///var/run/docker.sock}
+    volumes:
+      # 默认挂载本地 Docker socket；使用远程 Docker（DOCKER_HOST=tcp://...）时请注释/删除本行
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - app-net
+  # 后端服务：使用 Maven 多阶段构建，运行基于 JRE 21
+  ruoyi-admin:
+    build:
+      context: .
+      dockerfile: Dockerfile-admin
+    image: ghcr.io/zjwan461/ruoyi-admin:latest
+    container_name: ruoyi-admin
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./uploadPath:/uploadPath
+      - ./skills:/app/skills
+    depends_on:
+      redis:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-net
+  # 前端服务：使用 Node 22.04 多阶段构建，运行基于 Nginx
+  ruoyi-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile-ui
+    image: ghcr.io/zjwan461/ruoyi-ui:latest
+    container_name: ruoyi-ui
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      - TZ=Asia/Shanghai
+    depends_on:
+      - redis
+      - mysql
+      - postgres
+      - ruoyi-admin
+    networks:
+      - app-net
+  doc-parser:
+    build:
+      context: .
+      # 使用你之前写好的Dockerfile
+      dockerfile: Dockerfile-doc-parser
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+    image: ghcr.io/zjwan461/doc-parser:latest
+    container_name: doc-parser
+    restart: unless-stopped
+    ports:
+      - "8143:8143"
+    environment:
+      - TZ=Asia/Shanghai
+      - LANG=C.UTF-8
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      # replace with your qwen apikey
+      - OPENAI_API_KEY=sk-xxxxxx
+      - OPENAI_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+      - OCR_MODEL=qwen3.7-plus
+      - OCR_MAX_CONCURRENT=10
+      - OCR_PROMPT=Perform OCR on the uploaded document. Extract all text content accurately, and if the document contains tables, maintain their structure in markdown format. If the document contains images, describe the image in three sentences. Be concise and accurate. Do not add any explanations, summaries, or additional content—only output the extracted text and tables
+      - IMG_DESC_CONCURRENT=5
+      - IMG_DESC_PROMPT=Describe the image in clear and no more than three sentences, focusing on the main subject, key elements, and overall context. If the image contains text, then summarize its overall meaning.Keep it brief, accurate, and relevant to the core content of the image.
+      - SERVER_API_KEY=ocr-eacc3af9-b7a9-41c4-990f-ab988bd99a1e
+      - DESCRIBE_DOC_IMG=false
+    networks:
+      - app-net
+  # agentic 服务：基于 LangChain/DeepAgents 的 AI Agent 网关
+  # 通过 gRPC 调用 ruoyi-admin 容器内的 ModelGrpcService（端口 9090）
+  agentic:
+    build:
+      context: .
+      dockerfile: Dockerfile-agentic
+    image: ghcr.io/zjwan461/agentic:latest
+    container_name: agentic
+    restart: unless-stopped
+    ports:
+      - "8142:8142"
+    environment:
+      - TZ=Asia/Shanghai
+      - LANG=C.UTF-8
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      # gRPC 服务端指向 ruoyi-admin 容器，端口与 ruoyi-admin 的 grpc.server.port 一致
+      - GRPC_HOST=ruoyi-admin
+      - GRPC_PORT=9090
+      # put your search apikey here
+      - TAVILY_API_KEY=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
+      - TOKEN_WHITELIST=admin_token,dev_token
+      - SANDBOX_BASE_URL=http://sandbox:8194
+      - SANDBOX_API_KEY=dify-sandbox
+      - SANDBOX_TIMEOUT=30
+      - DB_URI=postgresql://root:root@postgres:5432/embedding?sslmode=disable
+    volumes:
+      - ./skills:/skills
+    depends_on:
+      ruoyi-admin:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8142/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-net
+
+volumes:
+  mysql-data:
+  redis-data:
+  postgres-data:
+
+networks:
+  app-net:
+    driver: bridge

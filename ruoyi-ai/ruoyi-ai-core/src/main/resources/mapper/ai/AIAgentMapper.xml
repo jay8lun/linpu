@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.ai.mapper.AIAgentMapper">
+
+    <resultMap type="AiAgent" id="AiAgentResult">
+        <result property="id"                  column="id"                  />
+        <result property="name"                column="name"                />
+        <result property="kbIds"               column="kb_ids"              />
+        <result property="systemMessage"       column="system_message"      />
+        <result property="memoryCount"         column="memory_count"        />
+        <result property="modelId"             column="model_id"            />
+        <result property="modelName"           column="model_name"          />
+        <result property="createBy"            column="create_by"           />
+        <result property="createTime"          column="create_time"         />
+        <result property="updateBy"            column="update_by"           />
+        <result property="updateTime"          column="update_time"         />
+        <result property="agentType"           column="agent_type"          />
+        <result property="difyApiId"           column="dify_api_id"         />
+        <result property="difyApiName"         column="dify_api_name"       />
+        <result property="status"              column="status"              />
+        <result property="visitUrl"            column="visit_url"           />
+        <result property="dayLmtPerClient"     column="day_lmt_per_client"  />
+        <result property="temperature"         column="temperature"         />
+        <result property="maxOutputToken"      column="max_output_token"    />
+        <result property="promptTemplate"      column="prompt_template"     />
+        <result property="minScore"            column="min_score"           />
+        <result property="maxResult"           column="max_result"          />
+        <result property="description"         column="description"          />
+        <result property="webSearch"           column="web_search"          />
+        <result property="webSearchCount"      column="web_search_count"          />
+    </resultMap>
+
+    <resultMap id="AiAgentWithToolAndSkillResult" type="AiAgent" extends="AiAgentResult">
+        <collection property="agentTools" javaType="java.util.List" ofType="com.ruoyi.ai.domain.AgentTool">
+            <result property="id" column="tool_id"/>
+            <result property="toolName" column="tool_name"/>
+            <result property="toolType" column="tool_type"/>
+            <result property="code" column="code"/>
+            <result property="clazz" column="clazz"/>
+            <result property="parameters" column="parameters"/>
+            <result property="description" column="tool_description"/>
+            <result property="createTime" column="tool_create_time"/>
+            <result property="updateTime" column="tool_update_time"/>
+            <result property="createBy" column="tool_create_by"/>
+            <result property="updateBy" column="tool_update_by"/>
+        </collection>
+        <collection property="agentSkills" javaType="java.util.List" ofType="com.ruoyi.ai.domain.AgentSkill">
+            <result property="id" column="skill_id"/>
+            <result property="skillName" column="skill_name"/>
+            <result property="skillType" column="skill_type"/>
+            <result property="skillDescription" column="skill_description"/>
+            <result property="skillContent" column="skill_content"/>
+            <result property="createTime" column="skill_create_time"/>
+            <result property="updateTime" column="skill_update_time"/>
+            <result property="createBy" column="skill_create_by"/>
+            <result property="updateBy" column="skill_update_by"/>
+        </collection>
+        <collection property="agentMcpTools" javaType="java.util.List" ofType="com.ruoyi.ai.domain.AgentMcpTool">
+            <result property="id" column="mcp_tool_id"/>
+            <result property="mcpToolName" column="mcp_tool_name"/>
+            <result property="mcpToolDescription" column="mcp_tool_description"/>
+            <result property="mcpToolParameters" column="mcp_tool_parameters"/>
+            <result property="mcpToolMetadata" column="mcp_tool_metadata"/>
+            <result property="pid" column="pid"/>
+            <result property="createTime" column="mcp_tool_create_time"/>
+            <result property="updateTime" column="mcp_tool_update_time"/>
+            <result property="createBy" column="mcp_tool_create_by"/>
+            <result property="updateBy" column="mcp_tool_update_by"/>
+        </collection>
+    </resultMap>
+
+    <sql id="selectAiAgentVo">
+        select id, name, kb_ids, system_message, memory_count, model_id, model_name, create_by, create_time,
+               update_by, update_time, agent_type, dify_api_id, dify_api_name, status, visit_url, day_lmt_per_client,
+                temperature, max_output_token, prompt_template, min_score, max_result, description, web_search, web_search_count
+        from ai_agent
+    </sql>
+
+    <select id="selectAiAgentList" parameterType="AiAgent" resultMap="AiAgentResult">
+        <include refid="selectAiAgentVo"/>
+        <where>
+            <if test="name != null  and name != ''"> and name like concat('%', #{name}, '%')</if>
+            <if test="kbIds != null "> and kb_ids = #{kbIds}</if>
+            <if test="memoryCount != null  and memoryCount != ''"> and memory_count = #{memoryCount}</if>
+            <if test="modelId != null "> and model_id = #{modelId}</if>
+            <if test="status != null "> and status = #{status}</if>
+            <if test="agentType != null "> and agent_type = #{agentType}</if>
+        </where>
+    </select>
+
+    <select id="selectAiAgentById" parameterType="Long" resultMap="AiAgentResult">
+        <include refid="selectAiAgentVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertAiAgent" parameterType="AiAgent" useGeneratedKeys="true" keyProperty="id">
+        insert into ai_agent
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="name != null and name != ''">name,</if>
+            <if test="kbIds != null">kb_ids,</if>
+            <if test="systemMessage != null">system_message,</if>
+            <if test="memoryCount != null and memoryCount != ''">memory_count,</if>
+            <if test="modelId != null">model_id,</if>
+            <if test="modelName != null and modelName != ''">model_name,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="agentType != null and agentType != ''">agent_type,</if>
+            <if test="difyApiId != null">dify_api_id,</if>
+            <if test="difyApiName != null and difyApiName != ''">dify_api_name,</if>
+            <if test="status != null">status,</if>
+            <if test="visitUrl != null">visit_url,</if>
+            <if test="dayLmtPerClient != null">day_lmt_per_client,</if>
+            <if test="temperature != null">temperature,</if>
+            <if test="maxOutputToken != null">max_output_token,</if>
+            <if test="promptTemplate != null">prompt_template,</if>
+            <if test="minScore != null">min_score,</if>
+            <if test="maxResult != null">max_result,</if>
+            <if test="description != null">description,</if>
+            <if test="webSearch != null">web_search,</if>
+            <if test="webSearchCount != null">web_search_count,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="name != null and name != ''">#{name},</if>
+            <if test="kbIds != null">#{kbIds},</if>
+            <if test="systemMessage != null">#{systemMessage},</if>
+            <if test="memoryCount != null and memoryCount != ''">#{memoryCount},</if>
+            <if test="modelId != null">#{modelId},</if>
+            <if test="modelName != null and modelName != ''">#{modelName},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="agentType != null and agentType != ''">#{agentType},</if>
+            <if test="difyApiId != null">#{difyApiId},</if>
+            <if test="difyApiName != null and difyApiName != ''">#{difyApiName},</if>
+            <if test="status != null">#{status},</if>
+            <if test="visitUrl != null">#{visitUrl},</if>
+            <if test="dayLmtPerClient != null">#{dayLmtPerClient},</if>
+            <if test="temperature != null">#{temperature},</if>
+            <if test="maxOutputToken != null">#{maxOutputToken},</if>
+            <if test="promptTemplate != null">#{promptTemplate},</if>
+            <if test="minScore != null">#{minScore},</if>
+            <if test="maxResult != null">#{maxResult},</if>
+            <if test="description != null">#{description},</if>
+            <if test="webSearch != null">#{webSearch},</if>
+            <if test="webSearchCount != null">#{webSearchCount},</if>
+         </trim>
+    </insert>
+
+    <update id="updateAiAgent" parameterType="AiAgent">
+        update ai_agent
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="name != null and name != ''">name = #{name},</if>
+            <if test="kbIds != null">kb_ids = #{kbIds},</if>
+            <if test="systemMessage != null">system_message = #{systemMessage},</if>
+            <if test="memoryCount != null and memoryCount != ''">memory_count = #{memoryCount},</if>
+            <if test="modelId != null">model_id = #{modelId},</if>
+            <if test="modelName != null and modelName !=''">model_name = #{modelName},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="agentType != null and agentType != ''">agent_type = #{agentType},</if>
+            <if test="difyApiId != null">dify_api_id = #{difyApiId},</if>
+            <if test="difyApiName != null">dify_api_name = #{difyApiName},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="visitUrl != null">visit_url = #{visitUrl},</if>
+            <if test="dayLmtPerClient != null">day_lmt_per_client = #{dayLmtPerClient},</if>
+            <if test="temperature != null">temperature = #{temperature},</if>
+            <if test="maxOutputToken != null">max_output_token = #{maxOutputToken},</if>
+            <if test="promptTemplate != null">prompt_template = #{promptTemplate},</if>
+            <if test="minScore != null">min_score = #{minScore},</if>
+            <if test="maxResult != null">max_result = #{maxResult},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="webSearch != null">web_search = #{webSearch},</if>
+            <if test="webSearchCount != null">web_search_count = #{webSearchCount},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteAiAgentById" parameterType="Long">
+        delete from ai_agent where id = #{id}
+    </delete>
+
+    <delete id="deleteAiAgentByIds" parameterType="String">
+        delete from ai_agent where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="selectAiAgentByVisitUrl" parameterType="java.lang.String" resultMap="AiAgentResult">
+        <include refid="selectAiAgentVo"/>
+        where visit_url = #{visitUrl}
+    </select>
+
+    <select id="selectAiAgentWithToolAndSkillById" parameterType="Long" resultMap="AiAgentWithToolAndSkillResult">
+        select a.id,
+               a.name,
+               a.kb_ids,
+               a.system_message,
+               a.memory_count,
+               a.model_id,
+               a.model_name,
+               a.create_by,
+               a.create_time,
+               a.update_by,
+               a.update_time,
+               a.agent_type,
+               a.dify_api_id,
+               a.dify_api_name,
+               a.status,
+               a.visit_url,
+               a.day_lmt_per_client,
+               a.temperature,
+               a.max_output_token,
+               a.prompt_template,
+               a.min_score,
+               a.max_result,
+               a.description,
+               a.web_search,
+               a.web_search_count,
+               c.id          tool_id,
+               c.tool_name,
+               c.tool_type,
+               c.code,
+               c.clazz,
+               c.parameters,
+               c.description tool_description,
+               c.create_time tool_create_time,
+               c.update_time tool_update_time,
+               c.create_by   tool_create_by,
+               c.update_by   tool_update_by,
+               e.id          skill_id,
+               e.skill_name,
+               e.skill_description,
+               e.skill_content,
+               e.skill_type,
+               e.create_time skill_create_time,
+               e.update_time skill_update_time,
+               e.create_by   skill_create_by,
+               e.update_by   skill_update_by,
+               g.id          mcp_tool_id,
+               g.mcp_tool_name,
+               g.mcp_tool_description,
+               g.mcp_tool_parameters,
+               g.mcp_tool_metadata,
+               g.pid,
+               g.create_time mcp_tool_create_time,
+               g.update_time mcp_tool_update_time,
+               g.create_by   mcp_tool_create_by,
+               g.update_by   mcp_tool_update_by
+        from ai_agent a
+                 left join agent_tool_mapping b on a.id = b.agent_id
+                 left join agent_tool c on b.tool_id = c.id
+                 left join agent_skill_mapping d on a.id = d.agent_id
+                 left join agent_skill e on d.skill_id = e.id
+                 left join agent_mcp_tool_mapping f on a.id = f.agent_id
+                 left join agent_mcp_tool g on f.mcp_tool_id = g.id
+        where a.id = #{id}
+    </select>
+
+    <insert id="insertAgentToolMapping" useGeneratedKeys="true" keyProperty="id">
+        insert into agent_tool_mapping (agent_id, tool_id)
+        values (#{agentId}, #{toolId})
+    </insert>
+
+    <insert id="batchInsertAgentToolMapping" useGeneratedKeys="true" keyProperty="id">
+        insert into agent_tool_mapping (agent_id, tool_id)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (
+            #{item.agentId},
+            #{item.toolId}
+            )
+        </foreach>
+    </insert>
+
+    <delete id="deleteAgentToolMappingByAgentId" parameterType="Long">
+        delete from agent_tool_mapping where agent_id = #{agentId}
+    </delete>
+
+    <insert id="insertAgentSkillMapping" useGeneratedKeys="true" keyProperty="id">
+        insert into agent_skill_mapping (agent_id, skill_id)
+        values (#{agentId}, #{skillId})
+    </insert>
+
+    <insert id="batchInsertAgentSkillMapping" useGeneratedKeys="true" keyProperty="id">
+        insert into agent_skill_mapping (agent_id, skill_id)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (
+            #{item.agentId},
+            #{item.skillId}
+            )
+        </foreach>
+    </insert>
+
+    <delete id="deleteAgentSkillMappingByAgentId" parameterType="Long">
+        delete from agent_skill_mapping where agent_id = #{agentId}
+    </delete>
+
+    <insert id="insertAgentMcpToolMapping" useGeneratedKeys="true" keyProperty="id">
+        insert into agent_mcp_tool_mapping (agent_id, mcp_tool_id)
+        values (#{agentId}, #{mcpToolId})
+    </insert>
+
+    <insert id="batchInsertAgentMcpToolMapping" useGeneratedKeys="true" keyProperty="id">
+        insert into agent_mcp_tool_mapping (agent_id, mcp_tool_id)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (
+            #{item.agentId},
+            #{item.mcpToolId}
+            )
+        </foreach>
+    </insert>
+
+    <delete id="deleteAgentMcpToolMappingByAgentId" parameterType="Long">
+        delete from agent_mcp_tool_mapping where agent_id = #{agentId}
+    </delete>
+</mapper>

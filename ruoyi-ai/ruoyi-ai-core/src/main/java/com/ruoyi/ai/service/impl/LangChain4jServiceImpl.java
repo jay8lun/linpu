@@ -1,0 +1,258 @@
+package com.ruoyi.ai.service.impl;
+
+import com.ruoyi.ai.component.mcp.JHttpMcpTransport;
+import com.ruoyi.ai.config.AiConfig;
+import com.ruoyi.ai.enums.ModelProvider;
+import com.ruoyi.ai.enums.ModelType;
+import com.ruoyi.ai.service.LangChain4jService;
+import com.ruoyi.ai.util.Constants;
+import com.ruoyi.ai.util.PgVectorUtil;
+import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.DictUtils;
+import com.ruoyi.system.service.ISysConfigService;
+import dev.langchain4j.agent.tool.ToolSpecification;
+import dev.langchain4j.data.document.Document;
+import dev.langchain4j.data.document.DocumentSplitter;
+import dev.langchain4j.data.document.loader.FileSystemDocumentLoader;
+import dev.langchain4j.data.document.splitter.DocumentSplitters;
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.mcp.client.DefaultMcpClient;
+import dev.langchain4j.mcp.client.transport.McpTransport;
+import dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport;
+import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.embedding.onnx.OnnxEmbeddingModel;
+import dev.langchain4j.model.embedding.onnx.PoolingMode;
+import dev.langchain4j.model.ollama.OllamaChatModel;
+import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
+import dev.langchain4j.model.output.Response;
+import dev.langchain4j.store.embedding.EmbeddingMatch;
+import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
+import dev.langchain4j.store.embedding.EmbeddingSearchRequest.EmbeddingSearchRequestBuilder;
+import dev.langchain4j.store.embedding.EmbeddingSearchResult;
+import dev.langchain4j.store.embedding.filter.Filter;
+import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import javax.annotation.Resource;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+
+@Slf4j
+@Service
+public class LangChain4jServiceImpl implements LangChain4jService {
+
+    @Resource
+    private AiConfig aiConfig;
+
+    @Resource
+    private PgVectorUtil pgVectorUtil;
+
+    @Resource
+    private ISysConfigService sysConfigService;
+
+    @Resource
+    private PgVectorEmbeddingStore embeddingStore;
+
+    @Override
+    public boolean checkModelConfig(String baseUrl, String apiKey, String modelName,
+                                    ModelProvider provider, ModelType type) {
+        if (type == ModelType.LLM) {
+            ChatModel model = null;
+            if (provider == ModelProvider.OPEN_AI) {
+                model = OpenAiChatModel.builder()
+                        .baseUrl(baseUrl)
+                        .modelName(modelName)
+                        .logRequests(true)
+                        .logResponses(true)
+                        .apiKey(apiKey)
+                        .build();
+            } else if (provider == ModelProvider.OLLAMA) {
+                model = OllamaChatModel.builder()
+                        .baseUrl(baseUrl)
+                        .modelName(modelName)
+                        .logRequests(true)
+                        .logResponses(true)
+                        .build();
+            } else
+                throw new ServiceException("不支持模型提供商");
+
+            try {
+                model.chat(Constants.TEST_CHAT_TEXT);
+            } catch (Exception e) {
+                log.error("check model config error", e);
+                return false;
+            }
+        } else {
+            EmbeddingModel model = null;
+            if (provider == ModelProvider.OPEN_AI) {
+                model = OpenAiEmbeddingModel.builder()
+                        .baseUrl(baseUrl)
+                        .apiKey(apiKey)
+                        .modelName(modelName)
+                        .dimensions(aiConfig.getPgVector().getDimension())
+                        .logRequests(true)
+                        .logResponses(true)
+                        .build();
+            } else if (provider == ModelProvider.OLLAMA) {
+                model = OllamaEmbeddingModel.builder()
+                        .baseUrl(baseUrl)
+                        .modelName(modelName)
+                        .logRequests(true)
+                        .logResponses(true)
+                        .build();
+            } else
+                throw new ServiceException("不支持模型提供商");
+
+            try {
+                model.embed(Constants.TEST_EMBEDDING_TEXT);
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    @Override
+    public List<TextSegment> splitDocument(String docFile, int maxSegmentSize, int maxOverlapSize) {
+        Document document = FileSystemDocumentLoader.loadDocument(docFile);
+        DocumentSplitter splitter = DocumentSplitters.recursive(maxSegmentSize, maxOverlapSize);
+        return splitter.split(document);
+    }
+
+    @Override
+    public List<String> embedTextSegments(EmbeddingModel embeddingModel, List<TextSegment> textSegments, Consumer<List<TextSegment>> consumer) {
+        String value = sysConfigService.selectConfigByKey("ai.embedding.batchSize");
+        int batchSize = Integer.parseInt(value);
+        List<String> ids = new ArrayList<>();
+        if (textSegments.size() < batchSize) {
+            ids = doEmbedding(embeddingModel, textSegments);
+        } else {
+            int mod = textSegments.size() % batchSize;
+            int divide = textSegments.size() / batchSize;
+            int loop = mod == 0 ? divide : divide + 1;
+            for (int i = 0; i < loop; i++) {
+                int from = i * batchSize;
+                int end = Math.min(from + batchSize, textSegments.size());
+                List<TextSegment> tmp = textSegments.subList(from, end);
+                ids.addAll(doEmbedding(embeddingModel, tmp));
+            }
+        }
+        if (consumer != null) {
+            consumer.accept(textSegments);
+        }
+        return ids;
+    }
+
+    private List<String> doEmbedding(EmbeddingModel embeddingModel, List<TextSegment> textSegments) {
+        Response<List<Embedding>> response = embeddingModel.embedAll(textSegments);
+        List<Embedding> embeddings = response.content();
+        return embeddingStore.addAll(embeddings, textSegments);
+    }
+
+
+    @Override
+    public List<Map<String, Object>> querySegmentTextEqualsByMetaData(
+            Map<String, Object> metadata) {
+        return pgVectorUtil.selectByMetadata(metadata);
+    }
+
+    @Override
+    public void removeSegment(List<String> ids) {
+        embeddingStore.removeAll(ids);
+    }
+
+    @Override
+    public void updateSegment(EmbeddingModel embeddingModel, TextSegment textSegment,
+                              String embeddingId) {
+        Response<Embedding> response = embeddingModel.embed(textSegment);
+        Embedding embedding = response.content();
+        embeddingStore.removeAll(Collections.singletonList(embeddingId));
+        embeddingStore.addAll(Collections.singletonList(embeddingId),
+                Collections.singletonList(embedding), Collections.singletonList(textSegment));
+    }
+
+    @Override
+    public List<EmbeddingMatch<TextSegment>> search(EmbeddingModel embeddingModel, String query,
+                                                    int maxResult, double minScore, Filter filter) {
+        Response<Embedding> response = embeddingModel.embed(query);
+
+        EmbeddingSearchRequestBuilder searchBuilder = EmbeddingSearchRequest.builder();
+        searchBuilder.queryEmbedding(response.content())
+                .maxResults(maxResult)
+                .minScore(minScore);
+        if (filter != null) {
+            searchBuilder.filter(filter);
+        }
+        EmbeddingSearchResult<TextSegment> result = embeddingStore.search(searchBuilder.build());
+        return result.matches();
+    }
+
+    @Override
+    public boolean checkLocalEmbeddingModel(String saveDir) {
+        try {
+            String pathToModel = saveDir + Constants.LOCAL_EMBEDDING_MODEL_FILE;
+            String pathToTokenizer = saveDir + Constants.LOCAL_EMBEDDING_TOKENIZER_FILE;
+            PoolingMode poolingMode = PoolingMode.MEAN;
+            EmbeddingModel embeddingModel = new OnnxEmbeddingModel(pathToModel, pathToTokenizer, poolingMode);
+            embeddingModel.embed(Constants.TEST_EMBEDDING_TEXT);
+            return true;
+        } catch (Exception e) {
+            log.error("检查本地模型失败", e);
+            return false;
+        }
+    }
+
+    @Override
+    public void removeSegmentByFilter(Filter filter) {
+        embeddingStore.removeAll(filter);
+    }
+
+    @Override
+    public List<ToolSpecification> listMcpTool(String mcpUrl, String transport, String authToken) {
+        McpTransport mcpTransport = getMcpTransport(mcpUrl, transport, authToken);
+        try (DefaultMcpClient client = DefaultMcpClient.builder()
+                .transport(mcpTransport)
+                .toolExecutionTimeout(aiConfig.getMcp().getTimeout())
+                .build()) {
+            return client.listTools();
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("拉取MCP工具列表失败");
+        }
+    }
+
+    @Override
+    public McpTransport getMcpTransport(String mcpUrl, String transport, String authToken) {
+        String sseTransport = DictUtils.getDictValue("ai_mcp_transport", "sse");
+        String stdioTransport = DictUtils.getDictValue("ai_mcp_transport", "stdio");
+        String streamableHttpTransport = DictUtils.getDictValue("ai_mcp_transport", "streamable-http");
+        McpTransport mcpTransport = null;
+        if (sseTransport.equals(transport)) {
+            mcpTransport = JHttpMcpTransport.builder()
+                    .sseUrl(mcpUrl)
+                    .customHeaders(mcpCallContext -> Map.of("Authorization", "Bearer " + authToken))
+                    .build();
+        } else if (stdioTransport.equals(transport)) {
+            mcpTransport = StdioMcpTransport.builder()
+                    .build();
+        } else if (streamableHttpTransport.equals(transport)) {
+            mcpTransport = StreamableHttpMcpTransport.builder()
+                    .url(mcpUrl)
+                    .customHeaders(mcpCallContext -> Map.of("Authorization", "Bearer " + authToken))
+                    .build();
+        } else {
+            throw new ServiceException("不支持的transport:" + transport);
+        }
+        return mcpTransport;
+    }
+}

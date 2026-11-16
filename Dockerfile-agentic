@@ -1,0 +1,43 @@
+FROM python:3.11-slim AS builder
+
+# 替换apt源
+RUN sed -i "s@deb.debian.org@mirrors.aliyun.com@g" /etc/apt/sources.list.d/debian.sources \
+    && sed -i "s@security.debian.org@mirrors.aliyun.com@g" /etc/apt/sources.list.d/debian.sources
+
+# agentic 依赖编译相关系统包（grpcio、cryptography 等需要）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    libffi-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=C.UTF-8
+ENV PYTHONIOENCODING=utf-8
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY agentic/requirements.txt .
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+
+COPY agentic/ .
+# 复制 skills 目录（python_sandbox_backend.py 启动时扫描该目录上传技能到 Sandbox）
+COPY skills/ /skills
+# 修复 Windows 检出导致的 CRLF 换行符（否则 sh 执行报 "Illegal option"）
+RUN sed -i 's/\r$//' gen_grpc.sh
+RUN sh gen_grpc.sh
+
+# ========== 最终运行镜像，完全继承文件，但不带构建工具 ==========
+FROM python:3.11-slim
+# 复制系统依赖、python环境、代码
+COPY --from=builder / /
+
+ENV LANG=C.UTF-8
+ENV PYTHONIOENCODING=utf-8
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+EXPOSE 8142
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8142"]

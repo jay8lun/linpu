@@ -1,0 +1,88 @@
+package com.ruoyi.ai.service.grpc.server;
+
+import com.ruoyi.ai.domain.Model;
+import com.ruoyi.ai.service.IModelService;
+import com.ruoyi.ai.service.grpc.impl.GetModelByIdRequest;
+import com.ruoyi.ai.service.grpc.impl.GetModelByIdResponse;
+import com.ruoyi.ai.service.grpc.impl.ListModelRequest;
+import com.ruoyi.ai.service.grpc.impl.ListModelResponse;
+import com.ruoyi.ai.service.grpc.impl.ModelGrpcServiceGrpc.ModelGrpcServiceImplBase;
+import io.grpc.stub.StreamObserver;
+import lombok.extern.slf4j.Slf4j;
+import net.devh.boot.grpc.server.service.GrpcService;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+@GrpcService
+@Component
+@Slf4j
+public class ModelGrpcServer extends ModelGrpcServiceImplBase {
+
+    private final IModelService modelService;
+
+    public ModelGrpcServer(IModelService modelService) {
+        this.modelService = modelService;
+    }
+
+    @Override
+    public void listModel(ListModelRequest request, StreamObserver<ListModelResponse> responseObserver) {
+        try {
+            List<Model> models = modelService.selectModelList(null);
+            List<com.ruoyi.ai.service.grpc.impl.Model> respList = models.stream().map(model -> com.ruoyi.ai.service.grpc.impl.Model.newBuilder()
+                    .setId(model.getId())
+                    .setName(model.getName())
+                    .setBaseUrl(model.getBaseUrl())
+                    .setApiKey(model.getApiKey())
+                    .setTemperature(model.getTemperature())
+                    .setMaxOutputToken(model.getMaxOutputToken())
+                    .setType(model.getType())
+                    .setProvider(model.getProvider())
+                    .build()).toList();
+
+            // 3. 构建返回响应体，填充列表
+            ListModelResponse response = ListModelResponse.newBuilder()
+                    .addAllModelList(respList)
+                    .build();
+
+            // 4. 返回结果给客户端
+            responseObserver.onNext(response);
+            // 5. 标记本次调用完成（必须调用，否则客户端会一直等待）
+            responseObserver.onCompleted();
+        } catch (Exception e) {
+            log.error("grpc calling error", e);
+            responseObserver.onError(e);
+        }
+
+    }
+
+    @Override
+    public void getModelById(GetModelByIdRequest request, StreamObserver<GetModelByIdResponse> responseObserver) {
+        try {
+            Long modelId = request.getModelId();
+            Model model = modelService.selectModelById(modelId);
+            
+            com.ruoyi.ai.service.grpc.impl.Model grpcModel = com.ruoyi.ai.service.grpc.impl.Model.newBuilder()
+                    .setId(model.getId())
+                    .setName(model.getName())
+                    .setBaseUrl(model.getBaseUrl())
+                    .setApiKey(model.getApiKey())
+                    .setTemperature(model.getTemperature())
+                    .setMaxOutputToken(model.getMaxOutputToken())
+                    .setType(model.getType())
+                    .setProvider(model.getProvider())
+                    .build();
+
+            GetModelByIdResponse response = GetModelByIdResponse.newBuilder()
+                    .setModel(grpcModel)
+                    .build();
+
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        } catch (Exception e) {
+            log.error("grpc calling error", e);
+            responseObserver.onError(e);
+        }
+    }
+
+}

@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.ai.mapper.ChatFlowMessageMapper">
+
+    <resultMap type="ChatFlowMessage" id="ChatFlowMessageResult">
+        <result property="id" column="id"/>
+        <result property="role" column="role"/>
+        <result property="content" column="content"/>
+        <result property="clientId" column="client_id"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="agentId" column="agent_id"/>
+        <result property="agentFlowId" column="agent_flow_id"/>
+        <result property="agentName" column="agent_name"/>
+        <result property="createTime" column="create_time"/>
+        <result property="traceId" column="trace_id"/>
+    </resultMap>
+
+    <resultMap id="ChatFlowMessageResultWithInvokeData" type="ChatFlowMessage" extends="ChatFlowMessageResult">
+        <!-- 嵌套查询知识库调用记录 -->
+        <collection
+                property="retrievedList"
+                javaType="java.util.List"
+                ofType="com.ruoyi.ai.domain.AgentKbInvoke"
+                select="selectKbInvokeByMsgId"
+                column="{msgId=id, msgRole=role}"
+        />
+        <collection
+                property="toolCalledList"
+                javaType="java.util.List"
+                ofType="com.ruoyi.ai.domain.AgentToolInvoke"
+                select="selectToolInvokeByMsgId"
+                column="{msgId=id, msgRole=role}"
+        />
+        <collection
+                property="attachments"
+                javaType="java.util.List"
+                ofType="com.ruoyi.ai.domain.Attachment"
+                select="selectAttachmentByMsgId"
+                column="{msgId=id, msgRole=role}"
+        />
+    </resultMap>
+
+    <sql id="selectChatMessageVo">
+        select id, role, content, client_id, session_id, agent_id, agent_flow_id, agent_name, create_time, trace_id
+        from chat_flow_message
+    </sql>
+
+    <select id="selectChatMessageList" parameterType="ChatFlowMessage" resultMap="ChatFlowMessageResult">
+        <include refid="selectChatMessageVo"/>
+        <where>
+            <if test="role != null  and role != ''">and role = #{role}</if>
+            <if test="content != null  and content != ''">and content = #{content}</if>
+            <if test="clientId != null  and clientId != ''">and client_id = #{clientId}</if>
+            <if test="sessionId != null  and sessionId != ''">and session_id = #{sessionId}</if>
+            <if test="agentId != null  and agentId != ''">and agent_id = #{agentId}</if>
+            <if test="agentFlowId != null  and agentFlowId != ''">and agent_flow_id = #{agentId}</if>
+            <if test="agentName != null  and agentName != ''">and agent_name = #{agentName}</if>
+            <if test="traceId != null  and traceId != ''">and trace_id = #{traceId}</if>
+        </where>
+    </select>
+
+    <select id="selectChatMessageById" parameterType="Long" resultMap="ChatFlowMessageResult">
+        <include refid="selectChatMessageVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertChatMessage" parameterType="ChatFlowMessage" useGeneratedKeys="true"
+            keyProperty="id">
+        insert into chat_flow_message
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="role != null and role != ''">role,</if>
+            <if test="content != null and content != ''">content,</if>
+            <if test="clientId != null and clientId != ''">client_id,</if>
+            <if test="sessionId != null and sessionId != ''">session_id,</if>
+            <if test="agentId != null and agentId != ''">agent_id,</if>
+            <if test="agentFlowId != null and agentFlowId != ''">agent_flow_id,</if>
+            <if test="agentName != null and agentName != ''">agent_name,</if>
+            <if test="traceId != null and traceId != ''">trace_id,</if>
+            <if test="createTime != null">create_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="role != null and role != ''">#{role},</if>
+            <if test="content != null and content != ''">#{content},</if>
+            <if test="clientId != null and clientId != ''">#{clientId},</if>
+            <if test="sessionId != null and sessionId != ''">#{sessionId},</if>
+            <if test="agentId != null and agentId != ''">#{agentId},</if>
+            <if test="agentFlowId != null and agentFlowId != ''">#{agentFlowId},</if>
+            <if test="agentName != null and agentName != ''">#{agentName},</if>
+            <if test="traceId != null and traceId != ''">#{traceId},</if>
+            <if test="createTime != null">#{createTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateChatMessage" parameterType="ChatFlowMessage">
+        update chat_message
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="role != null and role != ''">role = #{role},</if>
+            <if test="content != null and content != ''">content = #{content},</if>
+            <if test="clientId != null and clientId != ''">client_id = #{clientId},</if>
+            <if test="sessionId != null and sessionId != ''">session_id = #{sessionId},</if>
+            <if test="agentId != null and agentId != ''">agent_id = #{agentId},</if>
+            <if test="agentFlowId != null and agentFlowId != ''">agent_flow_id = #{agentFlowId},</if>
+            <if test="agentName != null and agentName != ''">agent_name = #{agentName},</if>
+            <if test="traceId != null and traceId != ''">trace_id = #{traceId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteChatMessageById" parameterType="Long">
+        delete
+        from chat_flow_message
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteChatMessageByIds" parameterType="String">
+        delete from chat_flow_message where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="selectSessionList" resultType="java.util.Map">
+        SELECT a.session_id sessionId, a.content title
+        from chat_flow_message a
+        where client_id
+            = #{clientId}
+          and agent_flow_id = #{agentFlowId}
+        group by a.session_id
+        order by a.create_time desc
+        <if test="limit !=null">
+        limit #{limit};
+        </if>
+    </select>
+
+    <select id="selectAgentChatMessageBySessionId" resultMap="ChatFlowMessageResult">
+        <include refid="selectChatMessageVo"/>
+        where session_id = #{sessionId} and agent_flow_id = #{agentFlowId}
+    </select>
+
+    <delete id="deleteBySessionId" parameterType="String">
+        delete from chat_flow_message where session_id = #{sessionId}
+    </delete>
+
+    <!-- 子查询：仅role=assistant才查询kb调用 -->
+    <select id="selectKbInvokeByMsgId" resultType="com.ruoyi.ai.domain.AgentKbInvoke">
+        select id,
+               agent_id agentId,
+               message_id messageId,
+               session_id sessionId,
+               client_id clientId,
+               text,
+               url,
+               file_name fileName,
+               create_time createTime
+        from agent_kb_invoke
+        where message_flow_id = #{msgId}
+          AND #{msgRole} = 'assistant'
+    </select>
+
+    <!-- 子查询：仅role=assistant才查询工具调用 -->
+    <select id="selectToolInvokeByMsgId" resultType="com.ruoyi.ai.domain.AgentToolInvoke">
+        select id,
+               agent_id agentId,
+               message_id messageId,
+               session_id sessionId,
+               client_id clientId,
+               tool_name toolName,
+               tool_invoke_result toolInvokeResult,
+               create_time createTIME
+        from agent_tool_invoke
+        where message_flow_id = #{msgId}
+          AND #{msgRole} = 'assistant'
+    </select>
+
+    <!-- 子查询：仅role=user才查询上传的文件 -->
+    <select id="selectAttachmentByMsgId" resultType="com.ruoyi.ai.domain.Attachment">
+        select id,
+               file_name fileName,
+               file_ext fileExt,
+               file_content fileContent,
+               file_url fileUrl,
+               message_id messageId,
+               message_flow_id messageFlowId,
+               create_time createTime
+        from attachment
+        where message_flow_id = #{msgId}
+          AND #{msgRole} = 'user'
+    </select>
+<select id="selectAgentChatMessageBySessionIdWithInvokeData" resultMap="ChatFlowMessageResultWithInvokeData">
+    <include refid="selectChatMessageVo"/>
+    where session_id = #{sessionId} and agent_flow_id = #{agentFlowId}
+    order by create_time asc
+</select>
+
+<!-- 倒序分页专用：PageHelper 会自动附加 LIMIT，但不会覆盖已有 ORDER BY；按 create_time desc, id desc 保证同毫秒下的稳定顺序 -->
+<select id="selectAgentChatMessageBySessionIdWithInvokeDataOrderDesc" resultMap="ChatFlowMessageResultWithInvokeData">
+    <include refid="selectChatMessageVo"/>
+    where session_id = #{sessionId} and agent_flow_id = #{agentFlowId}
+    order by create_time desc, id desc
+</select>
+
+<!-- ============================================== -->
+<!-- 对话日志：按 traceId 分组聚合的 Agent Flow 分页查询 -->
+<!-- 入参：agentFlowId（必填）、sessionId（可选）、traceId（可选，模糊匹配） -->
+<!-- 出参：每行表示一次对话（同一 traceId）以及首条 user 消息、消息数、参与的 Agent 数、最大时间等 -->
+<!-- ============================================== -->
+<select id="selectChatLogTraceList" resultType="java.util.Map">
+    SELECT
+        t.trace_id                                                              AS traceId,
+        t.session_id                                                            AS sessionId,
+        t.client_id                                                             AS clientId,
+        t.agent_flow_id                                                         AS agentFlowId,
+        COUNT(*)                                                                AS msgCount,
+        COUNT(DISTINCT t.agent_id)                                              AS agentCount,
+        GROUP_CONCAT(DISTINCT t.agent_name SEPARATOR ',')                       AS agentNames,
+        MIN(t.create_time)                                                      AS startTime,
+        MAX(t.create_time)                                                      AS endTime,
+        (SELECT content
+         FROM chat_flow_message
+         WHERE trace_id = t.trace_id
+           AND role = 'user'
+         ORDER BY create_time ASC, id ASC
+         LIMIT 1)                                                               AS userQuestion,
+        (SELECT content
+         FROM chat_flow_message
+         WHERE trace_id = t.trace_id
+           AND role = 'assistant'
+         ORDER BY create_time DESC, id DESC
+         LIMIT 1)                                                               AS lastAnswer
+    FROM chat_flow_message t
+    WHERE t.agent_flow_id = #{agentFlowId}
+      AND t.trace_id IS NOT NULL
+      <if test="sessionId != null and sessionId != ''">AND t.session_id = #{sessionId}</if>
+      <if test="traceId != null and traceId != ''">AND t.trace_id LIKE CONCAT('%', #{traceId}, '%')</if>
+    GROUP BY t.trace_id, t.session_id, t.client_id, t.agent_flow_id
+    ORDER BY startTime DESC, t.trace_id DESC
+</select>
+
+<!-- 对话日志：根据 traceId 查询 Agent Flow 一次对话的全部消息（按时间正序） -->
+<select id="selectChatLogMessagesByTraceId" resultMap="ChatFlowMessageResultWithInvokeData">
+    <include refid="selectChatMessageVo"/>
+    where trace_id = #{traceId}
+    order by create_time asc, id asc
+</select>
+
+<!-- 对话日志：仅查询 Agent Flow 一次对话的消息列表（不含 invoke 数据） -->
+<select id="selectChatLogSimpleMessagesByTraceId" resultMap="ChatFlowMessageResult">
+    <include refid="selectChatMessageVo"/>
+    where trace_id = #{traceId}
+    order by create_time asc, id asc
+</select>
+
+<!-- 对话日志：查询某 Agent Flow 流水中出现过的全部 sessionId（用于下拉） -->
+<select id="selectChatLogSessionIdList" resultType="java.util.Map">
+    SELECT session_id AS sessionId,
+           MIN(create_time) AS startTime,
+           COUNT(DISTINCT trace_id) AS traceCount
+    FROM chat_flow_message
+    WHERE agent_flow_id = #{agentFlowId}
+      AND session_id IS NOT NULL
+    GROUP BY session_id
+    ORDER BY startTime DESC
+</select>
+
+<!-- 对话日志：删除单个 traceId 对应的所有消息（Agent Flow） -->
+<delete id="deleteChatLogByTraceId">
+    delete from chat_flow_message where trace_id = #{traceId}
+</delete>
+
+<!-- 对话日志：查询 Agent Flow 一次对话中参与的 Agent 列表（按出现顺序排序） -->
+<select id="selectChatLogAgentsByTraceId" resultType="java.util.Map">
+    SELECT agent_id      AS agentId,
+           agent_name    AS agentName,
+           MIN(create_time) AS firstTime,
+           MAX(create_time) AS lastTime,
+           COUNT(*)      AS msgCount
+    FROM chat_flow_message
+    WHERE trace_id = #{traceId}
+    GROUP BY agent_id, agent_name
+    ORDER BY firstTime ASC
+</select>
+</mapper>
