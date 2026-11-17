@@ -1,5 +1,38 @@
+# ===== 版本控制与 IDE =====
+.git
+.gitignore
+.gitattributes
+.idea
+*.iml
+
+# ===== 构建产物（容器内会重新构建）=====
+target
+**/target
+dist
+**/dist
+build
+**/build
+
+# ===== 依赖目录 =====
+node_modules
+**/node_modules
 .venv
-target/
-*.class
-dist/
-node_modules/
+**/.venv
+**/__pycache__
+**/*.pyc
+
+# ===== 本地数据与模型（体积大，且不应进入镜像）=====
+models
+**/models
+uploadPath
+**/uploadPath
+eval/results
+doc-site/site
+logs
+**/*.log
+
+# ===== 凭证与本地配置（避免打进镜像层）=====
+.env
+**/.env
+*.pem
+*.key
