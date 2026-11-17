@@ -1,0 +1,368 @@
+package com.ruoyi.ai.controller;
+
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.exceptions.ExceptionUtil;
+import cn.hutool.core.map.MapUtil;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ruoyi.ai.config.AiConfig;
+import com.ruoyi.ai.controller.model.DocSplitReq;
+import com.ruoyi.ai.controller.model.EmbeddingReq;
+import com.ruoyi.ai.controller.model.KbMatchReq;
+import com.ruoyi.ai.controller.model.TextEmbeddingReq;
+import com.ruoyi.ai.domain.KnowledgeBase;
+import com.ruoyi.ai.domain.Model;
+import com.ruoyi.ai.enums.ModelType;
+import com.ruoyi.ai.service.IKnowledgeBaseService;
+import com.ruoyi.ai.service.IModelService;
+import com.ruoyi.ai.service.LangChain4jService;
+import com.ruoyi.ai.service.impl.ModelBuilder;
+import com.ruoyi.ai.util.Constants;
+import com.ruoyi.ai.util.PgVectorUtil;
+import com.ruoyi.common.annotation.Log;
+import com.ruoyi.common.config.LinpuConfig;
+import com.ruoyi.common.constant.HttpStatus;
+import com.ruoyi.common.core.controller.BaseController;
+import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.core.page.TableDataInfo;
+import com.ruoyi.common.enums.BusinessType;
+import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.common.utils.poi.ExcelUtil;
+import com.ruoyi.framework.manager.AsyncManager;
+import com.ruoyi.framework.web.service.TokenService;
+import com.ruoyi.framework.websocket.SocketMessage;
+import com.ruoyi.framework.websocket.WebSocketUsers;
+import com.ruoyi.system.service.ISysConfigService;
+import dev.langchain4j.data.document.Metadata;
+import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.store.embedding.EmbeddingMatch;
+import dev.langchain4j.store.embedding.filter.comparison.IsEqualTo;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.repository.query.Param;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.validation.Valid;
+import javax.validation.constraints.NotBlank;
+import javax.websocket.Session;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * 知识库Controller
+ *
+ * @author jerry
+ * @date 2025-08-25
+ */
+@RestController
+@RequestMapping("/ai/knowledgeBase")
+public class KnowledgeBaseController extends BaseController {
+
+
+    @Autowired
+    private IKnowledgeBaseService knowledgeBaseService;
+
+    @Autowired
+    private LangChain4jService langChain4jService;
+
+    @Autowired
+    private IModelService modelService;
+
+    @Autowired
+    private PgVectorUtil pgVectorUtil;
+
+    @Autowired
+    private ModelBuilder modelBuilder;
+
+    @Autowired
+    private ISysConfigService sysConfigService;
+
+    @Autowired
+    private TokenService tokenService;
+
+    @Autowired
+    private HttpServletRequest request;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private AiConfig aiConfig;
+
+    /**
+     * 查询知识库列表
+     */
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:list')")
+    @GetMapping("/list")
+    public TableDataInfo list(KnowledgeBase knowledgeBase) {
+        startPage();
+        List<KnowledgeBase> list = knowledgeBaseService.selectKnowledgeBaseList(knowledgeBase);
+        return getDataTable(list);
+    }
+
+    /**
+     * 导出知识库列表
+     */
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:export')")
+    @Log(title = "知识库", businessType = BusinessType.EXPORT)
+    @PostMapping("/export")
+    public void export(HttpServletResponse response, KnowledgeBase knowledgeBase) {
+        List<KnowledgeBase> list = knowledgeBaseService.selectKnowledgeBaseList(knowledgeBase);
+        ExcelUtil<KnowledgeBase> util = new ExcelUtil<KnowledgeBase>(KnowledgeBase.class);
+        util.exportExcel(response, list, "知识库数据");
+    }
+
+    /**
+     * 获取知识库详细信息
+     */
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:query')")
+    @GetMapping(value = "/{id}")
+    public AjaxResult getInfo(@PathVariable("id") Long id) {
+        return success(knowledgeBaseService.selectKnowledgeBaseById(id));
+    }
+
+    /**
+     * 新增知识库
+     */
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:add')")
+    @Log(title = "知识库", businessType = BusinessType.INSERT)
+    @PostMapping
+    public AjaxResult add(@RequestBody KnowledgeBase knowledgeBase) {
+        knowledgeBase.setCreateBy(getUsername());
+        return toAjax(knowledgeBaseService.insertKnowledgeBase(knowledgeBase));
+    }
+
+    /**
+     * 修改知识库
+     */
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:edit')")
+    @Log(title = "知识库", businessType = BusinessType.UPDATE)
+    @PutMapping
+    public AjaxResult edit(@RequestBody KnowledgeBase knowledgeBase) {
+        knowledgeBase.setUpdateBy(getUsername());
+        return toAjax(knowledgeBaseService.updateKnowledgeBase(knowledgeBase));
+    }
+
+    /**
+     * 删除知识库
+     */
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:remove')")
+    @Log(title = "知识库", businessType = BusinessType.DELETE)
+    @DeleteMapping("/{ids}")
+    public AjaxResult remove(@PathVariable Long[] ids) {
+        return toAjax(knowledgeBaseService.deleteKnowledgeBaseByIds(ids));
+    }
+
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:list')")
+    @PostMapping("/doc-split")
+    public AjaxResult docSplit(@RequestBody DocSplitReq docSplitReq) {
+        List<TextSegment> textSegments = docSplitSegment(
+                docSplitReq);
+        return success(textSegments.stream().map(TextSegment::text).collect(Collectors.toList()));
+    }
+
+    private List<TextSegment> docSplitSegment(DocSplitReq docSplitReq) {
+        LinkedHashMap<String, Object> file = docSplitReq.getFileList().get(0);
+        String fileName = (String) ((HashMap) file.get("response")).get("fileName");
+        fileName = fileName.replace("/profile", LinpuConfig.getProfile());
+
+        return langChain4jService.splitDocument(fileName,
+                docSplitReq.getMaxSegmentSize(),
+                docSplitReq.getMaxOverlapSize());
+    }
+
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:list')")
+    @Log(title = "文档向量化", businessType = BusinessType.INSERT)
+    @PostMapping("/embedding")
+    public AjaxResult embedding(@RequestBody @Valid EmbeddingReq embeddingReq) {
+        Long embeddingModelId = embeddingReq.getEmbeddingModelId();
+        Model model = modelService.selectModelById(embeddingModelId);
+        EmbeddingModel embeddingModel = modelBuilder.getEmbeddingModel(model);
+        List<TextSegment> segments = docSplitSegment(embeddingReq);
+        segments.forEach(segment -> {
+            Metadata metadata = segment.metadata();
+            metadata.put(Constants.KB_ID, embeddingReq.getKbId());
+        });
+        String batchSize = sysConfigService.selectConfigByKey("ai.embedding.batchSize");
+        String token = tokenService.getToken(request);
+        AsyncManager.me().execute(new TimerTask() {
+            @Override
+            public void run() {
+                Session session = WebSocketUsers.getSessionByToken(token);
+                try {
+                    langChain4jService.embedTextSegments(embeddingModel, segments, textSegments -> {
+                        if (session != null) {
+                            try {
+                                WebSocketUsers.sendMessageToUserByText(session, objectMapper.writeValueAsString(SocketMessage.success("文档分段向量化处理完成")));
+                            } catch (JsonProcessingException ignored) {
+                            }
+                        }
+                    });
+                } catch (Exception e) {
+                    logger.error("embedding fail...", e);
+                    try {
+                        WebSocketUsers.sendMessageToUserByText(session, objectMapper.writeValueAsString(SocketMessage.error("embedding fail..." + ExceptionUtil.getRootCause(e).getMessage())));
+                    } catch (JsonProcessingException ignored) {
+                    }
+                }
+            }
+        });
+
+        Map<String, Object> res = MapUtil.<String, Object>builder()
+                .put("batchSize", batchSize)
+                .put("segmentSize", segments.size())
+                .build();
+        return success(res);
+    }
+
+    @GetMapping("/check-embedding-dimension")
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:list')")
+    public AjaxResult checkEmbeddingDimension() {
+        String value = sysConfigService.selectConfigByKey("ai.model.embedding");
+        if (StringUtils.isEmpty(value) || "#".equals(value)) {
+            throw new ServiceException("尚未配置默认Embedding模型");
+        }
+
+        Model model = modelService.selectModelById(Long.parseLong(value));
+        if (model == null) {
+            throw new ServiceException("id=" + value + "的向量模型不存在");
+        }
+        ModelType modelType = ModelType.fromValue(model.getType());
+        if (modelType != ModelType.EMBEDDING) {
+            throw new ServiceException("错误的模型类型，应为Embedding模型，实际为" + modelType);
+        }
+
+        EmbeddingModel embeddingModel = modelBuilder.getEmbeddingModel(model);
+        int dimension = embeddingModel.embed("test").content().dimension();
+        if (dimension != aiConfig.getPgVector().getDimension()) {
+            throw new ServiceException("当前向量模型维度为" + dimension + "和向量数据库维度" + aiConfig.getPgVector().getDimension() + "不匹配");
+        }
+        return success();
+    }
+
+
+    @GetMapping("/segment-query")
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:list')")
+    public TableDataInfo segmentQuery(@NotBlank @Param("kbId") Long kbId, @Param("pageNum") int pageNum,
+                                      @Param("pageSize") int pageSize) {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put(Constants.KB_ID, kbId);
+        List<Map<String, Object>> all = langChain4jService.querySegmentTextEqualsByMetaData(
+                metadata).stream().map(x -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("embeddingId", x.get("embeddingId"));
+            map.put("text", x.get("text"));
+            return map;
+        }).collect(Collectors.toList());
+        int startIndex = (pageNum - 1) * pageSize;
+        int endIndex = startIndex + pageSize;
+        TableDataInfo tableDataInfo = new TableDataInfo();
+        int total = all.size();
+        tableDataInfo.setTotal(total);
+        tableDataInfo.setCode(HttpStatus.SUCCESS);
+        tableDataInfo.setRows(CollUtil.sub(all, startIndex, endIndex));
+        return tableDataInfo;
+    }
+
+    @GetMapping("/segment-query/{id}")
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:list')")
+    public AjaxResult getSegment(@PathVariable("id") String id) {
+        Map<String, Object> segment = pgVectorUtil.selectById(id);
+        segment.remove("metadata");
+        segment.remove("embedding");
+        String value = sysConfigService.selectConfigByKey("ai.model.embedding");
+        if (StringUtils.isNotBlank(value)) {
+            segment.put("embeddingModelId", Long.parseLong(value));
+        }
+        return success(segment);
+    }
+
+    @DeleteMapping("/segment-del/{ids}")
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:list')")
+    public AjaxResult delSegment(@PathVariable String[] ids) {
+        langChain4jService.removeSegment(CollUtil.toList(ids));
+        return success();
+    }
+
+    @PutMapping("/segment-update")
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:list')")
+    public AjaxResult updateSegment(@RequestBody TextEmbeddingReq textEmbeddingReq) {
+        Long embeddingModelId = textEmbeddingReq.getEmbeddingModelId();
+        Model model = modelService.selectModelById(embeddingModelId);
+        EmbeddingModel embeddingModel = modelBuilder.getEmbeddingModel(model);
+        String embeddingId = textEmbeddingReq.getEmbeddingId();
+        Map<String, Object> segment = pgVectorUtil.selectById(embeddingId);
+        if (segment != null) {
+            Metadata metadata = (Metadata) segment.get("metadata");
+            metadata.put("update_ts", LocalDateTime.now().toString());
+            metadata.put("update_by", getUsername());
+            TextSegment textSegment = TextSegment.from(textEmbeddingReq.getText(), metadata);
+            langChain4jService.updateSegment(embeddingModel, textSegment,
+                    embeddingId);
+        }
+        return success();
+    }
+
+    @GetMapping("/match")
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:list')")
+    public AjaxResult match(@Valid KbMatchReq kbMatchReq) {
+
+        String value = sysConfigService.selectConfigByKey("ai.model.embedding");
+        if (StringUtils.isBlank(value)) {
+            throw new ServiceException("未设置默认Embedding模型");
+        }
+        Model model = modelService.selectModelById(Long.parseLong(value));
+        EmbeddingModel embeddingModel = modelBuilder.getEmbeddingModel(model);
+        List<EmbeddingMatch<TextSegment>> result = langChain4jService.search(embeddingModel, kbMatchReq.getContent(), kbMatchReq.getMaxResult(), kbMatchReq.getMinScore(), new IsEqualTo(Constants.KB_ID, kbMatchReq.getKbId()));
+        List<Map<String, Object>> res = result.stream().map(x -> MapUtil.<String, Object>builder()
+                .put("segment", x.embedded().text())
+                .put("score", x.score())
+                .build()).collect(Collectors.toList());
+        return success(res);
+
+    }
+
+    @PostMapping("/re-embedding/{kbId}")
+    @PreAuthorize("@ss.hasPermi('ai:knowledgeBase:list')")
+    public AjaxResult reEmbedding(@PathVariable Long kbId) {
+        String value = sysConfigService.selectConfigByKey("ai.model.embedding");
+        if (StringUtils.isBlank(value)) {
+            throw new ServiceException("未设置默认Embedding模型");
+        }
+        Model model = modelService.selectModelById(Long.parseLong(value));
+        EmbeddingModel embeddingModel = modelBuilder.getEmbeddingModel(model);
+        Map<String, Object> req = new HashMap<>();
+        req.put(Constants.KB_ID, kbId);
+        final List<Map<String, Object>> result = langChain4jService.querySegmentTextEqualsByMetaData(req);
+        final String token = tokenService.getToken(request);
+        final String username = getUsername();
+        AsyncManager.me().execute(new TimerTask() {
+            @Override
+            public void run() {
+                result.forEach(item -> {
+                    String embeddingId = (String) item.get("embeddingId");
+                    Metadata metadata = (Metadata) item.get("metadata");
+                    metadata.put("update_ts", LocalDateTime.now().toString());
+                    metadata.put("update_by", username);
+                    String text = (String) item.get("text");
+                    TextSegment textSegment = TextSegment.from(text, metadata);
+                    langChain4jService.updateSegment(embeddingModel, textSegment, embeddingId);
+                });
+                Session session = WebSocketUsers.getSessionByToken(token);
+                if (session != null) {
+                    try {
+                        WebSocketUsers.sendMessageToUserByText(session, objectMapper.writeValueAsString(SocketMessage.success("知识库重新向量化完成！")));
+                    } catch (JsonProcessingException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        });
+        return success();
+    }
+}

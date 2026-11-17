@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.ruoyi</groupId>
-    <artifactId>ruoyi-langchain4j</artifactId>
+    <artifactId>linpu</artifactId>
     <version>3.9.0</version>
 
     <name>linpu</name>
@@ -202,59 +202,59 @@
             <!-- 定时任务-->
             <dependency>
                 <groupId>com.ruoyi</groupId>
-                <artifactId>ruoyi-quartz</artifactId>
+                <artifactId>linpu-quartz</artifactId>
                 <version>${ruoyi.version}</version>
             </dependency>
 
             <!-- 代码生成-->
             <dependency>
                 <groupId>com.ruoyi</groupId>
-                <artifactId>ruoyi-generator</artifactId>
+                <artifactId>linpu-generator</artifactId>
                 <version>${ruoyi.version}</version>
             </dependency>
 
             <!-- 核心模块-->
             <dependency>
                 <groupId>com.ruoyi</groupId>
-                <artifactId>ruoyi-framework</artifactId>
+                <artifactId>linpu-framework</artifactId>
                 <version>${ruoyi.version}</version>
             </dependency>
 
             <!-- 系统模块-->
             <dependency>
                 <groupId>com.ruoyi</groupId>
-                <artifactId>ruoyi-system</artifactId>
+                <artifactId>linpu-system</artifactId>
                 <version>${ruoyi.version}</version>
             </dependency>
 
             <!-- 通用工具-->
             <dependency>
                 <groupId>com.ruoyi</groupId>
-                <artifactId>ruoyi-common</artifactId>
+                <artifactId>linpu-common</artifactId>
                 <version>${ruoyi.version}</version>
             </dependency>
 
             <dependency>
                 <groupId>com.ruoyi</groupId>
-                <artifactId>ruoyi-ai</artifactId>
+                <artifactId>linpu-ai</artifactId>
                 <version>${ruoyi.version}</version>
             </dependency>
 
             <dependency>
                 <groupId>com.ruoyi</groupId>
-                <artifactId>ruoyi-ai-core</artifactId>
+                <artifactId>linpu-ai-core</artifactId>
                 <version>${ruoyi.version}</version>
             </dependency>
 
             <dependency>
                 <groupId>com.ruoyi</groupId>
-                <artifactId>ruoyi-ai-dify</artifactId>
+                <artifactId>linpu-ai-dify</artifactId>
                 <version>${ruoyi.version}</version>
             </dependency>
 
             <dependency>
                 <groupId>com.ruoyi</groupId>
-                <artifactId>ruoyi-ai-chat</artifactId>
+                <artifactId>linpu-ai-chat</artifactId>
                 <version>${ruoyi.version}</version>
             </dependency>
 
@@ -347,13 +347,13 @@
     </dependencyManagement>
 
     <modules>
-        <module>ruoyi-admin</module>
-        <module>ruoyi-framework</module>
-        <module>ruoyi-system</module>
-        <module>ruoyi-quartz</module>
-        <module>ruoyi-generator</module>
-        <module>ruoyi-common</module>
-        <module>ruoyi-ai</module>
+        <module>linpu-admin</module>
+        <module>linpu-framework</module>
+        <module>linpu-system</module>
+        <module>linpu-quartz</module>
+        <module>linpu-generator</module>
+        <module>linpu-common</module>
+        <module>linpu-ai</module>
     </modules>
     <packaging>pom</packaging>
 

@@ -16,7 +16,7 @@
 
 第一层是接入层，由 Nginx 承担静态资源分发与反向代理，对外监听 80 端口，将 `/prod-api/` 前缀的请求转发给后端网关 18080 端口。
 
-第二层是应用层，核心是 ruoyi-admin 单体服务，承载权限、菜单、字典、日志、定时任务等后台能力，同时承载 AI 业务的主流程编排。
+第二层是应用层，核心是 linpu-admin 单体服务，承载权限、菜单、字典、日志、定时任务等后台能力，同时承载 AI 业务的主流程编排。
 
 第三层是智能体服务层，包含两个独立进程：agentic 智能体编排服务监听 18142 端口，负责大模型调用、工具执行、多智能体流程编排；doc-parser 文档解析服务监听 18143 端口，负责把 PDF、Word、Excel、PPT 等格式转换为 Markdown 文本。
 
@@ -50,7 +50,7 @@
 
 ## 5 部署说明
 
-部署采用 Docker Compose 编排，共九个容器：nginx、ruoyi-admin、agentic、agentic-sandbox、doc-parser、mysql、redis、pgvector，以及可选的 dify 组件。
+部署采用 Docker Compose 编排，共九个容器：nginx、linpu-admin、agentic、agentic-sandbox、doc-parser、mysql、redis、pgvector，以及可选的 dify 组件。
 
 部署的要点有三个。第一，构建镜像时必须清除宿主环境注入的 HTTP_PROXY 变量，否则容器内访问软件源会失败。第二，Windows 环境下检出的 Shell 脚本可能带 CRLF 换行，需要在 Dockerfile 中做行尾归一化，否则容器内 dash 执行会报非法选项。第三，向量模型文件建议通过卷挂载持久化，避免容器重建后重复下载约 1.8 GB 的模型文件。
 
@@ -148,7 +148,7 @@ AI 编排框架为 LangChain4j，向量数据库为 PostgreSQL 15 加 pgvector �
 
 ## 14 模块职责边界
 
-ruoyi-admin 负责权限、配置、业务编排与对外接口，不直接持有模型实例的构建逻辑。
+linpu-admin 负责权限、配置、业务编排与对外接口，不直接持有模型实例的构建逻辑。
 
 agentic 只负责智能体执行，不负责用户鉴权与权限判断。
 
@@ -156,7 +156,7 @@ doc-parser 只做格式转换与文本抽取，不做分段与向量化。
 
 agentic-sandbox 只提供代码执行沙箱，不承载业务逻辑。
 
-数据库迁移由 ruoyi-admin 通过 Flyway 独占执行，其他服务不得执行 DDL。
+数据库迁移由 linpu-admin 通过 Flyway 独占执行，其他服务不得执行 DDL。
 
 ## 15 错误码定义
 
@@ -386,11 +386,11 @@ AI 相关权限标识统一以 `ai:` 开头，例如 `ai:model:list`、`ai:knowl
 
 生产环境采用单机多容器拓扑：一台 8 核 16 GB 的宿主机运行全部容器。
 
-接入层的 Nginx 直接占用 80 端口，应用层的 ruoyi-admin 不直接对外暴露。
+接入层的 Nginx 直接占用 80 端口，应用层的 linpu-admin 不直接对外暴露。
 
 数据层三个容器共享同一台宿主机，通过 Docker 内部网络通信，不对宿主机暴露端口。
 
-如需要高可用，可把数据层拆到独立宿主机，并对 ruoyi-admin 做双实例加负载均衡，但需注意会话状态存放在 Redis 中。
+如需要高可用，可把数据层拆到独立宿主机，并对 linpu-admin 做双实例加负载均衡，但需注意会话状态存放在 Redis 中。
 
 ## 35 推荐做法
 
@@ -422,7 +422,7 @@ AI 相关权限标识统一以 `ai:` 开头，例如 `ai:model:list`、`ai:knowl
 
 垂直扩容优先：先提升宿主机内存与 CPU，成本最低。
 
-水平扩容针对无状态服务：ruoyi-admin 可多实例部署，前面加负载均衡。
+水平扩容针对无状态服务：linpu-admin 可多实例部署，前面加负载均衡。
 
 agentic 为有状态服务（持有沙箱容器与本地模型），水平扩容需配合会话粘滞。
 
@@ -486,7 +486,7 @@ agentic 为有状态服务（持有沙箱容器与本地模型），水平扩容
 
 Nginx 监听 80 端口，协议 HTTP。
 
-ruoyi-admin 监听 18080 端口，协议 HTTP，内部通过 gRPC 调用 agentic 服务。
+linpu-admin 监听 18080 端口，协议 HTTP，内部通过 gRPC 调用 agentic 服务。
 
 agentic 监听 18142 端口，协议 HTTP 与 SSE。
 
@@ -592,7 +592,7 @@ v2.4.0 保留 v2.2 的全部对外接口路径与字段名，未做破坏性变�
 
 各服务均提供健康检查端点。
 
-ruoyi-admin 的健康检查是访问根路径返回 200。
+linpu-admin 的健康检查是访问根路径返回 200。
 
 agentic 的健康检查端点为 `/health`，返回 JSON 包含状态字段。
 
@@ -702,8 +702,8 @@ data: {}
 
 第四步，agentic 启动，建立与后端的 gRPC 连接。
 
-第五步，ruoyi-admin 启动，执行数据库迁移并对外提供服务。
+第五步，linpu-admin 启动，执行数据库迁移并对外提供服务。
 
 第六步，Nginx 启动，接入流量。
 
-顺序错误的典型现象是 ruoyi-admin 启动时数据库迁移失败，或 agentic 长连接反复重连。
+顺序错误的典型现象是 linpu-admin 启动时数据库迁移失败，或 agentic 长连接反复重连。

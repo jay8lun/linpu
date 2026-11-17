@@ -310,7 +310,7 @@ graph LR
 
 **使用流程**：
 1. 前端上传文件
-2. ruoyi-admin 调用 doc-parser API
+2. linpu-admin 调用 doc-parser API
 3. 返回解析后的 Markdown 内容
 4. 前端展示并生成 attachmentId
 5. 对话时携带 attachmentId

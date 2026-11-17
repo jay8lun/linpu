@@ -71,9 +71,9 @@ curl http://localhost:8143/health
 
 | 服务 | 端口 | 说明 |
 |------|------|------|
-| ruoyi-ui | 80 | 前端界面 |
-| ruoyi-admin | 8080 | 后端 API |
-| ruoyi-admin gRPC | 9090 | gRPC 服务 |
+| linpu-ui | 80 | 前端界面 |
+| linpu-admin | 8080 | 后端 API |
+| linpu-admin gRPC | 9090 | gRPC 服务 |
 | agentic | 8142 | Python 智能体网关 |
 | doc-parser | 8143 | 文档解析服务 |
 | agentic-sandbox | 8194 | Python 沙箱 |
@@ -98,7 +98,7 @@ volumes:
 
 ### 后端配置
 
-编辑 `ruoyi-admin/src/main/resources/application.yml`：
+编辑 `linpu-admin/src/main/resources/application.yml`：
 
 ```yaml
 # 服务端口
@@ -148,14 +148,14 @@ ai:
 
 ### 前端配置
 
-编辑 `ruoyi-ui/vue.config.js`：
+编辑 `linpu-ui/vue.config.js`：
 
 ```javascript
 module.exports = {
   devServer: {
     proxy: {
       '/dev-api': {
-        target: 'http://ruoyi-admin:8080',
+        target: 'http://linpu-admin:8080',
         changeOrigin: true,
         pathRewrite: {
           '^/dev-api': ''
@@ -182,7 +182,7 @@ server {
 
     # 后端 API 代理
     location /api/ {
-        proxy_pass http://ruoyi-admin:8080/;
+        proxy_pass http://linpu-admin:8080/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -190,7 +190,7 @@ server {
 
     # WebSocket 代理
     location /websocket/ {
-        proxy_pass http://ruoyi-admin:8080/websocket/;
+        proxy_pass http://linpu-admin:8080/websocket/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "Upgrade";
@@ -518,9 +518,9 @@ tar -xzf upload_20240101_120000.tar.gz -C /
 
 ```nginx
 upstream backend {
-    server ruoyi-admin-1:8080 weight=3;
-    server ruoyi-admin-2:8080 weight=2;
-    server ruoyi-admin-3:8080 weight=1;
+    server linpu-admin-1:8080 weight=3;
+    server linpu-admin-2:8080 weight=2;
+    server linpu-admin-3:8080 weight=1;
 }
 
 server {
@@ -577,7 +577,7 @@ public void handleAsyncEvent(AsyncEvent event) {
 
 ```bash
 # 查看日志
-docker compose logs ruoyi-admin
+docker compose logs linpu-admin
 
 # 检查端口占用
 netstat -tlnp | grep 8080
@@ -590,13 +590,13 @@ docker exec mysql mysql -u root -p -e "SHOW DATABASES;"
 
 ```bash
 # 查看 JVM 内存
-docker exec ruoyi-admin jmap -heap 1
+docker exec linpu-admin jmap -heap 1
 
 # 生成堆转储
-docker exec ruoyi-admin jmap -dump:format=b,file=/tmp/heap.hprof 1
+docker exec linpu-admin jmap -dump:format=b,file=/tmp/heap.hprof 1
 
 # 分析堆转储
-docker cp ruoyi-admin:/tmp/heap.hprof ./
+docker cp linpu-admin:/tmp/heap.hprof ./
 jhat -J-Xmx2g heap.hprof
 ```
 

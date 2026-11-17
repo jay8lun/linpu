@@ -119,12 +119,12 @@ services:
     networks:
       - app-net
   # 后端服务：使用 Maven 多阶段构建，运行基于 JRE 21
-  ruoyi-admin:
+  linpu-admin:
     build:
       context: .
       dockerfile: Dockerfile-admin
-    image: ghcr.io/zjwan461/ruoyi-admin:latest
-    container_name: ruoyi-admin
+    image: ghcr.io/zjwan461/linpu-admin:latest
+    container_name: linpu-admin
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -145,12 +145,12 @@ services:
     networks:
       - app-net
   # 前端服务：使用 Node 22.04 多阶段构建，运行基于 Nginx
-  ruoyi-ui:
+  linpu-ui:
     build:
       context: .
       dockerfile: Dockerfile-ui
-    image: ghcr.io/zjwan461/ruoyi-ui:latest
-    container_name: ruoyi-ui
+    image: ghcr.io/zjwan461/linpu-ui:latest
+    container_name: linpu-ui
     restart: unless-stopped
     ports:
       - "80:80"
@@ -160,7 +160,7 @@ services:
       - redis
       - mysql
       - postgres
-      - ruoyi-admin
+      - linpu-admin
     networks:
       - app-net
   doc-parser:
@@ -194,7 +194,7 @@ services:
     networks:
       - app-net
   # agentic 服务：基于 LangChain/DeepAgents 的 AI Agent 网关
-  # 通过 gRPC 调用 ruoyi-admin 容器内的 ModelGrpcService（端口 9090）
+  # 通过 gRPC 调用 linpu-admin 容器内的 ModelGrpcService（端口 9090）
   agentic:
     build:
       context: .
@@ -209,8 +209,8 @@ services:
       - LANG=C.UTF-8
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
-      # gRPC 服务端指向 ruoyi-admin 容器，端口与 ruoyi-admin 的 grpc.server.port 一致
-      - GRPC_HOST=ruoyi-admin
+      # gRPC 服务端指向 linpu-admin 容器，端口与 linpu-admin 的 grpc.server.port 一致
+      - GRPC_HOST=linpu-admin
       - GRPC_PORT=9090
       # put your search apikey here
       - TAVILY_API_KEY=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
@@ -222,7 +222,7 @@ services:
     volumes:
       - ./skills:/skills
     depends_on:
-      ruoyi-admin:
+      linpu-admin:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8142/health"]

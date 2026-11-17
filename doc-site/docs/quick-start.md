@@ -47,7 +47,7 @@ docker compose -f docker-compose-middleware.yml up -d
 
 ### 3. 配置后端
 
-编辑 `ruoyi-admin/src/main/resources/application-middleware.yml`：
+编辑 `linpu-admin/src/main/resources/application-middleware.yml`：
 
 ```yaml
 spring:
@@ -76,7 +76,7 @@ ai:
 ### 4. 启动后端服务
 
 ```bash
-cd ruoyi-admin
+cd linpu-admin
 mvn clean install -DskipTests
 mvn spring-boot:run
 ```
@@ -86,7 +86,7 @@ mvn spring-boot:run
 ### 5. 启动前端
 
 ```bash
-cd ruoyi-ui
+cd linpu-ui
 npm install
 npm run dev
 ```
@@ -162,7 +162,7 @@ docker compose ps
 ### 4. 查看日志
 
 ```bash
-docker compose logs -f ruoyi-admin
+docker compose logs -f linpu-admin
 ```
 
 ---
@@ -227,7 +227,7 @@ docker compose logs -f ruoyi-admin
 ### 前端开发
 
 ```bash
-cd ruoyi-ui
+cd linpu-ui
 npm install
 npm run dev
 ```

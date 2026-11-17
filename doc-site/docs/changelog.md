@@ -53,7 +53,7 @@
 ### 新增
 - 🔌 **MCP 工具市场**：原生智能体支持挂载来自 [Model Context Protocol](https://modelcontextprotocol.io/) Server 的工具。在【AI 工具箱 → MCP】维护 `agent_mcp_service`（`url` + `transport` + `authToken`）与子级 `agent_mcp_tool`（`name` / `description` / `parameters` / `metadata`），支持 `sse` / `stdio` / `streamable-http` 三种传输方式；`JToolProvider` 通过 langchain4j-mcp 加载后注册到智能体，LLM 可直接调用远端 MCP 工具。智能体侧通过 `agent_mcp_tool_mapping` 多对多绑定 MCP 工具，已自带 OkHttp 请求日志拦截器（`McpRequestLoggingInterceptor`）便于排障。
 - 📜 **Skills 技能体系**：在【AI 工具箱 → Skill】维护 `agent_skill` 技能（`skill_name` / `skill_description` / `skill_content` / `skill_type`），支持 `create`（系统创建）和 `import`（从仓库 `skills/` 目录导入）两种类型；智能体通过 `agent_skill_mapping` 多对多挂载技能，平台会把技能信息按 `Constants.SKILL_APPEND_SYSTEM_MESSAGE` 模板追加到 System Prompt，提示模型通过 `activate_skill` 工具在匹配场景下先激活技能再继续作答。
-- 🆕 **Monaco 代码编辑器**：`ruoyi-ui/src/components/Editor/codeEditor.vue`，在线编辑 Python 函数代码更友好。
+- 🆕 **Monaco 代码编辑器**：`linpu-ui/src/components/Editor/codeEditor.vue`，在线编辑 Python 函数代码更友好。
 - 🆕 **数据库迁移脚本**：`V3__create_skill_table.sql`（Skill 表）、`V4__create_mcp_table.sql`（MCP 表）。
 
 ### 优化

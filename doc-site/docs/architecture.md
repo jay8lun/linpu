@@ -9,7 +9,7 @@
 ```mermaid
 graph TB
     subgraph "前端层"
-        UI[ruoyi-ui<br/>Vue3 + Element Plus<br/>端口:80]
+        UI[linpu-ui<br/>Vue3 + Element Plus<br/>端口:80]
     end
 
     subgraph "API网关层"
@@ -18,7 +18,7 @@ graph TB
 
     subgraph "应用服务层"
         subgraph "Java后端服务"
-            ADMIN[ruoyi-admin<br/>Spring Boot 2.x<br/>端口:8080<br/>gRPC:9090]
+            ADMIN[linpu-admin<br/>Spring Boot 2.x<br/>端口:8080<br/>gRPC:9090]
             ORIGIN[AgentFlowChatServiceImpl<br/>origin模式<br/>LangChain4j原生执行]
         end
         
@@ -72,7 +72,7 @@ graph TB
 
 ## 📦 服务组件
 
-### ruoyi-admin (Java 后端服务)
+### linpu-admin (Java 后端服务)
 
 **技术栈**：
 - Spring Boot 2.x
@@ -131,8 +131,8 @@ graph TB
 - 向量化预处理
 
 **调用方式**：
-- 由 ruoyi-admin 通过 HTTP REST API 调用
-- 前端上传文件 → ruoyi-admin 调用 doc-parser → 返回解析内容 → 前端携带 attachmentId 发起对话
+- 由 linpu-admin 通过 HTTP REST API 调用
+- 前端上传文件 → linpu-admin 调用 doc-parser → 返回解析内容 → 前端携带 attachmentId 发起对话
 
 ### agentic-sandbox (自研 Python 代码执行沙箱)
 
@@ -148,7 +148,7 @@ graph TB
 - 容器生命周期管理
 
 **双路径调用**：
-- **ruoyi-admin (Java)**: 通过 `SandboxClient.java` 调用（origin 模式）
+- **linpu-admin (Java)**: 通过 `SandboxClient.java` 调用（origin 模式）
 - **agentic (Python)**: 通过 `python-sandbox-sdk` 调用（agentic 模式）
 
 ---
@@ -157,16 +157,16 @@ graph TB
 
 ### Agent Flow 对话主链路（双模式路由）
 
-Agent Flow 对话请求统一由前端发送到 `ruoyi-admin`，后端根据 `agent_flow.impl_type` 字段决定执行路径：
+Agent Flow 对话请求统一由前端发送到 `linpu-admin`，后端根据 `agent_flow.impl_type` 字段决定执行路径：
 
-- **origin 模式**：`ruoyi-admin` 自身使用 LangChain4j 原生执行 Flow
-- **agentic 模式**：`ruoyi-admin` 通过 `AgenticServiceImpl` → `AgenticRequestUtil` 将请求转发给 Python `agentic` 服务
+- **origin 模式**：`linpu-admin` 自身使用 LangChain4j 原生执行 Flow
+- **agentic 模式**：`linpu-admin` 通过 `AgenticServiceImpl` → `AgenticRequestUtil` 将请求转发给 Python `agentic` 服务
 
 ```mermaid
 sequenceDiagram
     participant U as 用户
-    participant UI as ruoyi-ui
-    participant ADMIN as ruoyi-admin<br/>(Java)
+    participant UI as linpu-ui
+    participant ADMIN as linpu-admin<br/>(Java)
     participant AG as agentic<br/>(Python)
     participant GRPC as gRPC
     participant DB as MySQL
@@ -226,7 +226,7 @@ sequenceDiagram
 
 ```mermaid
 graph LR
-    A[agentic<br/>Python Client] -->|gRPC| B[ruoyi-admin<br/>gRPC Server :9090]
+    A[agentic<br/>Python Client] -->|gRPC| B[linpu-admin<br/>gRPC Server :9090]
     
     B --> C[ModelGrpcServer]
     B --> D[AiAgentGrpcServer]
@@ -248,7 +248,7 @@ graph LR
 
 ```mermaid
 graph TD
-    A[前端请求] --> B[ruoyi-admin<br/>AIFlowChatController]
+    A[前端请求] --> B[linpu-admin<br/>AIFlowChatController]
     B --> C{agent_flow.impl_type?}
     
     C -->|origin| D[AgentFlowChatServiceImpl<br/>LangChain4j 原生执行]
@@ -290,7 +290,7 @@ graph TD
     
     E10 --> E11{是否有下一节点?}
     E11 -->|是| E5
-    E11 -->|否| E12[SSE 流式返回<br/>ruoyi-admin → 前端]
+    E11 -->|否| E12[SSE 流式返回<br/>linpu-admin → 前端]
 ```
 
 ---

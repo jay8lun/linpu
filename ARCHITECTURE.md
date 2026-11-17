@@ -9,7 +9,7 @@
 ```mermaid
 graph TB
     subgraph "前端层"
-        UI[ruoyi-ui<br/>Vue3 + Element Plus<br/>端口:80]
+        UI[linpu-ui<br/>Vue3 + Element Plus<br/>端口:80]
     end
 
     subgraph "API网关层"
@@ -18,7 +18,7 @@ graph TB
 
     subgraph "应用服务层"
         subgraph "Java后端服务"
-            ADMIN[ruoyi-admin<br/>Spring Boot 2.x<br/>端口:8080<br/>gRPC:9090]
+            ADMIN[linpu-admin<br/>Spring Boot 2.x<br/>端口:8080<br/>gRPC:9090]
             ORIGIN[AgentFlowChatServiceImpl<br/>origin模式<br/>LangChain4j原生执行]
         end
         
@@ -72,7 +72,7 @@ graph TB
 
 ### 2.1 核心服务
 
-#### 2.1.1 ruoyi-admin (Java 后端服务)
+#### 2.1.1 linpu-admin (Java 后端服务)
 
 **技术栈**：
 - Spring Boot 2.x
@@ -92,7 +92,7 @@ graph TB
 
 **关键模块**：
 ```
-ruoyi-admin/
+linpu-admin/
 ├── src/main/java/com/ruoyi/
 │   ├── web/controller/          # REST API 控制器
 │   ├── ai/
@@ -176,7 +176,7 @@ doc-parser/
     └── pdf_model_download.py    # 模型下载工具
 ```
 
-#### 2.1.4 ruoyi-ui (前端服务)
+#### 2.1.4 linpu-ui (前端服务)
 
 **技术栈**：
 - Vue 3
@@ -237,7 +237,7 @@ sandbox 服务被两条独立路径调用：
 
 | 调用方 | 客户端 | 协议 | 使用场景 |
 |--------|--------|------|----------|
-| **ruoyi-admin (Java)** | `SandboxClient.java` | HTTP REST API | LangChain4j 工具执行 (`RunPythonCodeTool`、`SandboxToolExecutor`) |
+| **linpu-admin (Java)** | `SandboxClient.java` | HTTP REST API | LangChain4j 工具执行 (`RunPythonCodeTool`、`SandboxToolExecutor`) |
 | **agentic (Python)** | `python-sandbox-sdk` (`AsyncSandboxClient`) | HTTP REST API (异步) | DeepAgents 框架沙箱后端 (`PythonSandboxBackend`) |
 
 **Java 端调用链路**：
@@ -259,7 +259,7 @@ DeepAgents Agent 决策需要执行代码
 
 **关键配置**：
 ```yaml
-# ruoyi-admin 端 (application-middleware.yml)
+# linpu-admin 端 (application-middleware.yml)
 ai:
   sandbox:
     base-url: http://agentic-sandbox:8194  # 容器内通过服务名访问
@@ -417,7 +417,7 @@ spring:
 
 **迁移脚本位置**：
 ```
-ruoyi-admin/src/main/resources/db/migration/
+linpu-admin/src/main/resources/db/migration/
 ├── V1__init_database.sql
 ├── V2__create_tool_table.sql
 ├── V3__create_skill_table.sql
@@ -435,16 +435,16 @@ ruoyi-admin/src/main/resources/db/migration/
 
 ### 4.1 Agent Flow 对话主链路（双模式路由）
 
-Agent Flow 对话请求统一由前端发送到 `ruoyi-admin`，后端根据 `agent_flow.impl_type` 字段决定由哪条路径执行：
+Agent Flow 对话请求统一由前端发送到 `linpu-admin`，后端根据 `agent_flow.impl_type` 字段决定由哪条路径执行：
 
-- **origin 模式**：`ruoyi-admin` 自身使用 LangChain4j 原生执行 Flow
-- **agentic 模式**：`ruoyi-admin` 通过 `AgenticServiceImpl` → `AgenticRequestUtil` 将请求转发给 Python `agentic` 服务
+- **origin 模式**：`linpu-admin` 自身使用 LangChain4j 原生执行 Flow
+- **agentic 模式**：`linpu-admin` 通过 `AgenticServiceImpl` → `AgenticRequestUtil` 将请求转发给 Python `agentic` 服务
 
 ```mermaid
 sequenceDiagram
     participant U as 用户
-    participant UI as ruoyi-ui
-    participant ADMIN as ruoyi-admin<br/>(Java)
+    participant UI as linpu-ui
+    participant ADMIN as linpu-admin<br/>(Java)
     participant AG as agentic<br/>(Python)
     participant GRPC as gRPC
     participant DB as MySQL
@@ -504,7 +504,7 @@ sequenceDiagram
 
 ```mermaid
 graph LR
-    A[agentic<br/>Python Client] -->|gRPC| B[ruoyi-admin<br/>gRPC Server :9090]
+    A[agentic<br/>Python Client] -->|gRPC| B[linpu-admin<br/>gRPC Server :9090]
     
     B --> C[ModelGrpcServer]
     B --> D[AiAgentGrpcServer]
@@ -550,7 +550,7 @@ service AgentMcpGrpcService {
 
 ```mermaid
 graph TD
-    A[前端请求] --> B[ruoyi-admin<br/>AIFlowChatController]
+    A[前端请求] --> B[linpu-admin<br/>AIFlowChatController]
     B --> C{agent_flow.impl_type?}
     
     C -->|origin| D[AgentFlowChatServiceImpl<br/>LangChain4j 原生执行]
@@ -592,7 +592,7 @@ graph TD
     
     E10 --> E11{是否有下一节点?}
     E11 -->|是| E5
-    E11 -->|否| E12[SSE 流式返回<br/>ruoyi-admin → 前端]
+    E11 -->|否| E12[SSE 流式返回<br/>linpu-admin → 前端]
 ```
 
 ### 4.4 知识库检索链路
@@ -665,7 +665,7 @@ graph LR
 
 ```mermaid
 graph TD
-    A[上传文档] --> B[ruoyi-admin]
+    A[上传文档] --> B[linpu-admin]
     B --> C[doc-parser<br/>文档解析]
     C --> D[文本分块]
     D --> E[Embedding API<br/>向量化]
@@ -691,8 +691,8 @@ services:
   postgres:       # PostgreSQL + pgvector
   
   # 应用服务
-  ruoyi-admin:    # Java 后端 (8080, 9090)
-  ruoyi-ui:       # 前端 (80)
+  linpu-admin:    # Java 后端 (8080, 9090)
+  linpu-ui:       # 前端 (80)
   agentic:        # Python AI 服务 (8142)
   doc-parser:     # 文档解析 (8143)
   agentic-sandbox: # 代码沙箱 (8194)
@@ -703,8 +703,8 @@ services:
 ```mermaid
 graph TB
     subgraph "Docker Network: app-net"
-        A[ruoyi-ui:80]
-        B[ruoyi-admin:8080<br/>gRPC:9090]
+        A[linpu-ui:80]
+        B[linpu-admin:8080<br/>gRPC:9090]
         C[agentic:8142]
         D[doc-parser:8143]
         E[agentic-sandbox:8194]
@@ -887,7 +887,7 @@ logging:
 ### 10.1 水平扩展
 
 **无状态服务**：
-- ruoyi-admin: 可多实例部署
+- linpu-admin: 可多实例部署
 - agentic: 可多实例部署
 - doc-parser: 可多实例部署
 

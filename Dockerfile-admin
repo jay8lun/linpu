@@ -7,16 +7,16 @@ WORKDIR /build
 
 # 先复制根 pom.xml 以及各子模块的 pom.xml，最大化利用 Docker 缓存
 COPY pom.xml ./
-COPY ruoyi-admin/pom.xml ./ruoyi-admin/
-COPY ruoyi-common/pom.xml ./ruoyi-common/
-COPY ruoyi-framework/pom.xml ./ruoyi-framework/
-COPY ruoyi-quartz/pom.xml ./ruoyi-quartz/
-COPY ruoyi-system/pom.xml ./ruoyi-system/
-COPY ruoyi-generator/pom.xml ./ruoyi-generator/
-COPY ruoyi-ai/pom.xml ./ruoyi-ai/
-COPY ruoyi-ai/ruoyi-ai-chat/pom.xml ./ruoyi-ai/ruoyi-ai-chat/
-COPY ruoyi-ai/ruoyi-ai-core/pom.xml ./ruoyi-ai/ruoyi-ai-core/
-COPY ruoyi-ai/ruoyi-ai-dify/pom.xml ./ruoyi-ai/ruoyi-ai-dify/
+COPY linpu-admin/pom.xml ./linpu-admin/
+COPY linpu-common/pom.xml ./linpu-common/
+COPY linpu-framework/pom.xml ./linpu-framework/
+COPY linpu-quartz/pom.xml ./linpu-quartz/
+COPY linpu-system/pom.xml ./linpu-system/
+COPY linpu-generator/pom.xml ./linpu-generator/
+COPY linpu-ai/pom.xml ./linpu-ai/
+COPY linpu-ai/linpu-ai-chat/pom.xml ./linpu-ai/linpu-ai-chat/
+COPY linpu-ai/linpu-ai-core/pom.xml ./linpu-ai/linpu-ai-core/
+COPY linpu-ai/linpu-ai-dify/pom.xml ./linpu-ai/linpu-ai-dify/
 
 # 预下载依赖（利用 Docker 缓存加速后续构建）
 RUN mvn -B -q dependency:go-offline || true
@@ -24,8 +24,8 @@ RUN mvn -B -q dependency:go-offline || true
 # 复制所有源码
 COPY . .
 
-# 构建 ruoyi-admin 模块及其依赖模块
-RUN mvn clean package -DskipTests -B -pl ruoyi-admin -am
+# 构建 linpu-admin 模块及其依赖模块
+RUN mvn clean package -DskipTests -B -pl linpu-admin -am
 
 # =====================
 # Stage 2: 运行时阶段，使用轻量 JRE 镜像
@@ -35,7 +35,7 @@ FROM eclipse-temurin:17.0.19_10-jre
 WORKDIR /app
 
 # 从构建阶段复制构建好的 jar
-COPY --from=builder /build/ruoyi-admin/target/ruoyi-admin.jar app.jar
+COPY --from=builder /build/linpu-admin/target/linpu-admin.jar app.jar
 
 # 复制 skills 目录（AgentSkillServiceImpl.syncSkills2Db 启动时扫描该目录同步技能到数据库）
 COPY --from=builder /build/skills /app/skills
